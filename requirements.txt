@@ -1,0 +1,16 @@
+aiodns==1.1.1
+aiohttp==3.4.0
+async-timeout==3.0.0
+asyncpg==0.17.0
+attrs==18.1.0
+beautifulsoup4==4.6.3
+cchardet==2.1.1
+chardet==3.0.4
+idna==2.7
+idna-ssl==1.1.0
+lxml==4.2.4
+multidict==4.3.1
+pycares==2.3.0
+six==1.11.0
+tld==0.9.1
+yarl==1.2.6
