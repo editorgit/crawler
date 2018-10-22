@@ -22,7 +22,7 @@ class pg:
         sql_select = f"""UPDATE domains SET in_job='{now}' 
                          WHERE ids IN 
             (SELECT ids FROM domains WHERE use_level > 0 and in_job IS NULL and last_visit_at IS NULL LIMIT 10)
-                         RETURNING ids AS domain_id, domain"""
+                         RETURNING ids AS domain_id, domain, max_depth"""
         print(f"sql_select: {sql_select}")
         async with self.pg_pool.acquire() as connection:
             return await connection.fetch(sql_select, *args, **kwargs)
@@ -33,7 +33,7 @@ class pg:
         sql_select = f"""UPDATE pages SET in_job='{now}' 
                                WHERE ids IN 
                     (SELECT ids FROM pages WHERE in_job IS NULL and last_visit_at IS NULL LIMIT 10)
-                               RETURNING ids AS pages_id, domain_id, page_url, depth"""
+                               RETURNING ids AS page_id, domain_id, page_url, depth, max_depth"""
         print(f"sql_select: {sql_select}")
         async with self.pg_pool.acquire() as connection:
             return await connection.fetch(sql_select, *args, **kwargs)

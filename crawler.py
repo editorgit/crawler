@@ -43,9 +43,9 @@ class BQueue(asyncio.Queue):
 
 class WebSpider:
 
-    def __init__(self, db_conn, create_conn_dict, concurrency=1, timeout=300,
+    def __init__(self, db_conn, create_conn_dict, concurrency=1, timeout=20,
                  delay=0, headers=None, verbose=True, cookies=None,
-                 max_parse=0, retries=2):
+                 max_parse=0, retries=2, test=None):
 
 
         self.headers = headers
@@ -64,6 +64,7 @@ class WebSpider:
 
         self.brief = defaultdict(set)
         self.data = dict()
+        self.test = test
 
         self.db_conn_dict = None
         self.create_conn_dict = create_conn_dict
@@ -73,6 +74,7 @@ class WebSpider:
         self.domains = list()
         self.pages = list()
         self.backlinks = list()
+        self.redirect_list = list()
 
         logging.basicConfig(level='INFO')
         self.log = logging.getLogger()
@@ -93,7 +95,7 @@ class WebSpider:
         db_list_request = list()
         for tld, db_conn in self.db_conn_dict.items():
             db_list_request.append(db_conn.fetch_domains4crawler())
-            db_list_request.append(db_conn.fetch_pages4crawler())
+            # db_list_request.append(db_conn.fetch_pages4crawler())
 
         for db_request in asyncio.as_completed(db_list_request):
             await self.update_queue(await db_request)
@@ -112,31 +114,39 @@ class WebSpider:
     async def update_data(self):
         # if domain or pages
         now = datetime.now()
-        sql = f"""UPDATE {self.data['table']} 
-                SET http_status_code={self.data["http_status"]}, title='{self.data["title"]}', in_job=Null, 
-                    last_visit_at='{now}', len_content={self.data.get("len_content", 0)} 
-                WHERE ids={self.data["ids"]}"""
+        if self.data['table'] == 'domains':
+            sql = f"UPDATE {self.data['table']} " \
+                  f"SET http_status_code={self.data['http_status']}, title='{self.data['title']}', in_job=Null," \
+                        f"last_visit_at='{now}', len_content={self.data.get('len_content', 0)} " \
+                  f"WHERE ids={self.data['ids']}"
+        else:
+            sql = f"UPDATE {self.data['table']} " \
+                  f"SET http_status_code={self.data['http_status']}, in_job=Null, last_visit_at='{now}' " \
+                  f"WHERE ids={self.data['ids']}"
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     async def insert_domains(self):
-        domains = tuple(self.domains) if len(self.domains) > 1 else list(self.domains)[0]
+        # domains = str(tuple((domain,) for domain in self.domains))[1:-1]
         sql = f"""INSERT INTO {self.data['table']} (domain)
-                    VALUES {domains} ON CONFLICT DO NOTHING"""
+                    VALUES {self.domains} ON CONFLICT DO NOTHING"""
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     async def insert_pages(self):
-        sql = f"""INSERT INTO pages (domain_id, depth, page_url)
+        sql = f"""INSERT INTO pages (domain_id, max_depth, depth, page_url)
                             VALUES {self.pages} ON CONFLICT DO NOTHING"""
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     async def insert_backlinks(self):
-        sql = f"""INSERT INTO backlinks (domain_id, depth, page_url)
-                            VALUES {self.pages} ON CONFLICT DO NOTHING"""
+        sql = f"""INSERT INTO backlinks (donor_domain_id, donor_page_id, link_to, anchor, is_dofollow)
+                            VALUES {self.backlinks} ON CONFLICT DO NOTHING"""
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
-    async def insert_redirects(self):
-        sql = f"""INSERT INTO redirects (domain_id, depth, page_url)
-                            VALUES {self.pages} ON CONFLICT DO NOTHING"""
+    async def insert_redirects(self, domain_id, redirects):
+        domain_pk = domain_id if domain_id else self.data['ids']
+        page_id = self.data['ids'] if domain_id else 0
+        sql = f"INSERT INTO redirects (domain_id, page_id, redirect_list, redirect_raw) " \
+              f"VALUES ({domain_pk}, {page_id}, {self.redirect_list}, {redirects}) " \
+              f"ON CONFLICT DO NOTHING"
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     def get_parsed_content(self, url):
@@ -151,8 +161,8 @@ class WebSpider:
         print(f"url: {url}")
         answer = dict()
         try:
-            async with self.client.get(url) as response:
             # async with aiohttp.request(method="GET", url=url, headers=self.headers) as response:
+            async with self.client.get(url) as response:
                 print(f"response: {response}")
                 self.counter['successful'] += 1
                 answer['document'] = await response.text()
