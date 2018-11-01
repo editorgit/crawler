@@ -1,1 +1,107 @@
 aZ/dXtZ*Yf4P+UgJ
+
+create table domains
+(
+	ids serial not null
+		constraint domains_ids_pk
+			primary key,
+	use_level smallint default 1,
+	domain varchar(100) not null
+		constraint domains_domain_pk
+			unique,
+	max_depth smallint default 2,
+	created_at timestamp default CURRENT_TIMESTAMP,
+	in_job timestamp,
+	last_visit_at timestamp,
+	http_status_code smallint,
+	title varchar(255),
+	len_content integer,
+	ip_address integer
+		constraint domains_ip_addresses_ids_fk
+			references ip_addresses
+)
+;
+
+create unique index domains_domain_uindex
+	on domains (domain)
+;
+
+----
+create table pages
+(
+	ids serial not null
+		constraint pages_ids_pk
+			primary key,
+	domain_id integer
+		constraint pages_domains_ids_fk
+			references domains,
+	max_depth smallint,
+	page_url varchar(255) not null,
+	depth smallint,
+	http_status_code smallint,
+	created_at timestamp default CURRENT_TIMESTAMP,
+	last_visit_at timestamp,
+	in_job timestamp,
+	ip_address integer
+		constraint pages_ip_addresses_ids_fk
+			references ip_addresses
+)
+;
+
+create unique index pages_page_url_uindex
+	on pages (page_url)
+;
+
+---
+create table backlinks
+(
+	ids serial not null
+		constraint backlinks_ids_pk
+			primary key,
+	donor_domain_id integer not null
+		constraint backlinks_domains_ids_fk
+			references domains,
+	donor_page_id integer,
+	link_to varchar(200),
+	anchor varchar(150),
+	is_dofollow boolean default true,
+	is_redirect boolean default false,
+	crawled_at timestamp default CURRENT_TIMESTAMP
+)
+;
+
+----
+
+create table redirects
+(
+	ids serial not null
+		constraint redirects_ids_pk
+			primary key,
+	domain_id integer not null
+		constraint redirects_domains_ids_fk
+			references domains,
+	page_id integer,
+	redirect_list varchar(150),
+	redirect_raw varchar(500),
+	created_at timestamp default CURRENT_TIMESTAMP
+)
+;
+
+create table ip_addresses
+(
+	ids serial not null
+		constraint ip_addresses_pkey
+			primary key,
+	ip_v4 inet,
+	ip_v6 inet,
+	counter integer default 1
+)
+;
+
+create unique index ip_addresses_ids_uindex
+	on ip_addresses (ids)
+;
+
+create unique index ip_addresses_ip_v4_uindex
+	on ip_addresses (ip_v4)
+;

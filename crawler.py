@@ -1,13 +1,16 @@
+import re
 import time
 import logging
+import string
 import json
 import csv
 import re
 import asyncio
 import aiohttp
 from collections import defaultdict
-
 from datetime import datetime
+
+import settings
 
 
 class BQueue(asyncio.Queue):
@@ -45,17 +48,19 @@ class WebSpider:
 
     def __init__(self, db_conn, create_conn_dict, concurrency=1, timeout=20,
                  delay=0, headers=None, verbose=True, cookies=None,
-                 max_parse=0, retries=2, test=None):
+                 max_parse=0, retries=2, test=None, low_limit=10):
 
 
         self.headers = headers
-        if not cookies:
-            cookies = dict()
-        self.client = aiohttp.ClientSession(headers=headers, cookies=cookies)
+        self.cookies = dict()
+        self.client = ''
 
         self.concurrency = concurrency
         self.delay = delay
         self.retries = retries
+
+        self.low_limit = low_limit
+        self.lock_queue = False
 
         # self.q_crawl = BQueue(capacity=max_crawl)
         self.q_parse = BQueue(capacity=max_parse)
@@ -70,13 +75,14 @@ class WebSpider:
         self.create_conn_dict = create_conn_dict
 
         self.can_parse = True
+        self.db_list_request = list()
 
         self.domains = list()
         self.pages = list()
         self.backlinks = list()
         self.redirect_list = list()
 
-        logging.basicConfig(level='INFO')
+        logging.basicConfig(level='WARNING')
         self.log = logging.getLogger()
 
         if not verbose:
@@ -92,10 +98,11 @@ class WebSpider:
         """
         Get URLS from DB and put them in Queue
         """
+        # if not self.db_list_request:
         db_list_request = list()
         for tld, db_conn in self.db_conn_dict.items():
             db_list_request.append(db_conn.fetch_domains4crawler())
-            # db_list_request.append(db_conn.fetch_pages4crawler())
+            db_list_request.append(db_conn.fetch_pages4crawler())
 
         for db_request in asyncio.as_completed(db_list_request):
             await self.update_queue(await db_request)
@@ -115,10 +122,11 @@ class WebSpider:
         # if domain or pages
         now = datetime.now()
         if self.data['table'] == 'domains':
-            sql = f"UPDATE {self.data['table']} " \
-                  f"SET http_status_code={self.data['http_status']}, title='{self.data['title']}', in_job=Null," \
-                        f"last_visit_at='{now}', len_content={self.data.get('len_content', 0)} " \
-                  f"WHERE ids={self.data['ids']}"
+            title = self.data['title'].replace("'", "")
+            sql = "UPDATE domains " \
+                  "SET http_status_code=%s, title='%s', in_job=Null, last_visit_at='%s', len_content=%s " \
+                  "WHERE ids=%s" % (self.data['http_status'], title, now,
+                                    self.data.get('len_content', 0), self.data['ids'])
         else:
             sql = f"UPDATE {self.data['table']} " \
                   f"SET http_status_code={self.data['http_status']}, in_job=Null, last_visit_at='{now}' " \
@@ -127,26 +135,27 @@ class WebSpider:
 
     async def insert_domains(self):
         # domains = str(tuple((domain,) for domain in self.domains))[1:-1]
-        sql = f"""INSERT INTO {self.data['table']} (domain)
+        sql = f"""INSERT INTO domains (domain)
                     VALUES {self.domains} ON CONFLICT DO NOTHING"""
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     async def insert_pages(self):
-        sql = f"""INSERT INTO pages (domain_id, max_depth, depth, page_url)
+        sql = f"""INSERT INTO pages (domain_id, max_depth, ip_address, depth, page_url)
                             VALUES {self.pages} ON CONFLICT DO NOTHING"""
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     async def insert_backlinks(self):
-        sql = f"""INSERT INTO backlinks (donor_domain_id, donor_page_id, link_to, anchor, is_dofollow)
-                            VALUES {self.backlinks} ON CONFLICT DO NOTHING"""
+        sql = "INSERT INTO backlinks (donor_domain_id, donor_page_id, link_to, anchor, is_dofollow)" \
+              "VALUES %s ON CONFLICT DO NOTHING" % self.backlinks
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     async def insert_redirects(self, domain_id, redirects):
         domain_pk = domain_id if domain_id else self.data['ids']
         page_id = self.data['ids'] if domain_id else 0
-        sql = f"INSERT INTO redirects (domain_id, page_id, redirect_list, redirect_raw) " \
-              f"VALUES ({domain_pk}, {page_id}, {self.redirect_list}, {redirects}) " \
-              f"ON CONFLICT DO NOTHING"
+        redirects = re.sub('['+string.punctuation+']', ' ', str(redirects)[:500])
+        sql = "INSERT INTO redirects (domain_id, page_id, redirect_list, redirect_raw) " \
+              "VALUES (%s, %s, '%s', '%s') " \
+              "ON CONFLICT DO NOTHING" % (domain_pk, page_id, str(self.redirect_list), redirects)
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     def get_parsed_content(self, url):
@@ -158,26 +167,74 @@ class WebSpider:
         raise NotImplementedError
 
     async def get_html_from_url(self, url):
-        print(f"url: {url}")
+        # print(f"url: {url}")
         answer = dict()
         try:
             # async with aiohttp.request(method="GET", url=url, headers=self.headers) as response:
             async with self.client.get(url) as response:
-                print(f"response: {response}")
-                self.counter['successful'] += 1
-                answer['document'] = await response.text()
-                # answer['content'] = response.content
+                # print(f"response: {response}")
+                if response.content_type.startswith('image'):
+                    title = f"Content type: IMAGE"
+                    self.log.info(title)
+                    self.counter['unsuccessful'] += 1
+                    answer['http_status'] = 71
+                    answer['title'] = title
+                    return answer
+
+                try:
+                    html = await response.text()
+                except UnicodeDecodeError:
+                    html = await response.text(encoding='Latin-1')
+                answer['document'] = html
+
+                # answer['content'] = await response.content.read()
                 answer['http_status'] = response.status
                 answer['real_url'] = f"{str(response._url).split(response.host)[0]}{response.host}"
                 answer['host'] = response.host
                 answer['redirects'] = response.history
-                # answer['ip_address'] = response.connection._protocol.transport.get_extra_info('peername')
+                self.counter['successful'] += 1
                 return answer
 
         except aiohttp.client_exceptions.ClientConnectorError:
             self.counter['unsuccessful'] += 1
             answer['http_status'] = 51
-            answer['title'] = "ConnectionError"
+            answer['title'] = "ClientConnectorError"
+            return answer
+
+        except aiohttp.client_exceptions.ServerDisconnectedError:
+            self.counter['unsuccessful'] += 1
+            answer['http_status'] = 52
+            answer['title'] = "ServerDisconnectedError"
+            return answer
+
+        except aiohttp.client_exceptions.ClientOSError:
+            self.counter['unsuccessful'] += 1
+            answer['http_status'] = 53
+            answer['title'] = "ClientOSError"
+            return answer
+
+        except aiohttp.client_exceptions.TooManyRedirects:
+            self.counter['unsuccessful'] += 1
+            answer['http_status'] = 54
+            answer['title'] = "TooManyRedirects"
+            return answer
+
+        except aiohttp.client_exceptions.ClientResponseError:
+            self.counter['unsuccessful'] += 1
+            answer['http_status'] = 55
+            answer['title'] = "ClientResponseError"
+            return answer
+
+        except aiohttp.client_exceptions.ClientPayloadError:
+            self.counter['unsuccessful'] += 1
+            answer['http_status'] = 56
+            answer['title'] = "ClientPayloadError"
+            return answer
+
+        except ValueError:
+            self.counter['unsuccessful'] += 1
+            answer['http_status'] = 57
+            answer['title'] = "URL should be absolute"
             return answer
 
     async def __wait(self, name):
@@ -187,13 +244,25 @@ class WebSpider:
 
     async def parse_url(self):
         url_data = await self.q_parse.get()
+
+        # self.log.info(f"Queue size: {self.q_parse.qsize()}")
+        if not self.lock_queue and self.q_parse.qsize() < settings.LOW_LIMIT and not self.test:
+            self.lock_queue = True
+            self.log.warning(f"Queue lock")
+            self.log.warning(f"Queue limit before {self.q_parse.qsize()}: {datetime.now()}")
+            await self.get_urls4crawler()
+            self.log.warning(f"Queue limit after {self.q_parse.qsize()}: {datetime.now()}")
+            self.lock_queue = False
+            self.log.warning(f"Queue unlock")
+
         self.log.info('Parsing: {}'.format(url_data))
 
         try:
             content = await self.get_parsed_content(url_data)
         except Exception:
-            self.log.error('An error has occurred during parsing',
+            self.log.error(f'Error during parsing: {url_data}',
                            exc_info=True)
+            # time.sleep(5)
         finally:
             self.q_parse.task_done()
 
@@ -210,14 +279,23 @@ class WebSpider:
             await self.__wait('Parser')
         return
 
+    async def create_session(self):
+        self.client = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(verify_ssl=False),
+            headers=self.headers,
+            cookies=self.cookies)
+
     async def run(self):
         start = time.time()
 
-        print('Start working')
-
+        self.log.warning(f'Start working: {datetime.now()}')
+        await self.create_session()
         await self.create_connections()
 
-        await self.get_urls4crawler()
+        if self.test:
+            await self.q_parse.put(self.test)
+        else:
+            await self.get_urls4crawler()
 
         def task_completed(future):
             # This function should never be called in right case.
@@ -238,6 +316,8 @@ class WebSpider:
 
         for task in tasks:
             task.cancel()
+
+        # await aiohttp.ClientSession.close()
 
         end = time.time()
         print('Done in {} seconds'.format(end - start))
