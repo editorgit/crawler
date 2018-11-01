@@ -52,7 +52,8 @@ class IpUpdate:
                           """ RETURNING ids """ % value
                     id_ip = await self.db_conn_dict[self.tld].fetchval(sql)
 
-                    sql = "UPDATE domains SET in_job=Null, ip_address ='%s' WHERE domain='%s'" % (id_ip, domain)
+                    sql = "UPDATE domains SET in_job=Null, http_status_code=Null, ip_address ='%s', title=Null, last_visit_at=Null " \
+                          "WHERE domain='%s'" % (id_ip, domain)
                     await self.db_conn_dict[self.tld].execute(sql)
 
 

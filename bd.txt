@@ -1,107 +1,107 @@
 aZ/dXtZ*Yf4P+UgJ
 
-create table domains
+-- auto-generated definition
+CREATE TABLE domains
 (
-	ids serial not null
-		constraint domains_ids_pk
-			primary key,
-	use_level smallint default 1,
-	domain varchar(100) not null
-		constraint domains_domain_pk
-			unique,
-	max_depth smallint default 2,
-	created_at timestamp default CURRENT_TIMESTAMP,
-	in_job timestamp,
-	last_visit_at timestamp,
-	http_status_code smallint,
-	title varchar(255),
-	len_content integer,
-	ip_address integer
-		constraint domains_ip_addresses_ids_fk
-			references ip_addresses
-)
-;
-
-create unique index domains_domain_uindex
-	on domains (domain)
-;
+  ids              SERIAL       NOT NULL
+    CONSTRAINT domains_ids_pk
+    PRIMARY KEY,
+  use_level        SMALLINT  DEFAULT 1,
+  domain           VARCHAR(100) NOT NULL
+    CONSTRAINT domains_domain_pk
+    UNIQUE,
+  max_depth        SMALLINT  DEFAULT 2,
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  in_job           TIMESTAMP,
+  last_visit_at    TIMESTAMP,
+  http_status_code SMALLINT,
+  title            VARCHAR(255),
+  len_content      INTEGER,
+  ip_address       INTEGER
+    CONSTRAINT domains_ip_addresses_ids_fk
+    REFERENCES ip_addresses
+);
+CREATE UNIQUE INDEX domains_domain_uindex
+  ON domains (domain);
 
 ----
-create table pages
-(
-	ids serial not null
-		constraint pages_ids_pk
-			primary key,
-	domain_id integer
-		constraint pages_domains_ids_fk
-			references domains,
-	max_depth smallint,
-	page_url varchar(255) not null,
-	depth smallint,
-	http_status_code smallint,
-	created_at timestamp default CURRENT_TIMESTAMP,
-	last_visit_at timestamp,
-	in_job timestamp,
-	ip_address integer
-		constraint pages_ip_addresses_ids_fk
-			references ip_addresses
-)
-;
 
-create unique index pages_page_url_uindex
-	on pages (page_url)
-;
+-- auto-generated definition
+CREATE TABLE pages
+(
+  ids              SERIAL       NOT NULL
+    CONSTRAINT pages_ids_pk
+    PRIMARY KEY,
+  domain_id        INTEGER
+    CONSTRAINT pages_domains_ids_fk
+    REFERENCES domains,
+  max_depth        SMALLINT,
+  page_url         VARCHAR(255) NOT NULL,
+  depth            SMALLINT,
+  http_status_code SMALLINT,
+  created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_visit_at    TIMESTAMP,
+  in_job           TIMESTAMP,
+  ip_address       INTEGER
+    CONSTRAINT pages_ip_addresses_ids_fk
+    REFERENCES ip_addresses
+);
+CREATE UNIQUE INDEX pages_page_url_uindex
+  ON pages (page_url);
+CREATE INDEX pages_ip_address
+  ON pages (ip_address);
 
 ---
-create table backlinks
+
+-- auto-generated definition
+CREATE TABLE backlinks
 (
-	ids serial not null
-		constraint backlinks_ids_pk
-			primary key,
-	donor_domain_id integer not null
-		constraint backlinks_domains_ids_fk
-			references domains,
-	donor_page_id integer,
-	link_to varchar(200),
-	anchor varchar(150),
-	is_dofollow boolean default true,
-	is_redirect boolean default false,
-	crawled_at timestamp default CURRENT_TIMESTAMP
-)
-;
+  ids             SERIAL  NOT NULL
+    CONSTRAINT backlinks_ids_pk
+    PRIMARY KEY,
+  donor_domain_id INTEGER NOT NULL
+    CONSTRAINT backlinks_domains_ids_fk
+    REFERENCES domains,
+  donor_page_id   INTEGER,
+  link_to         VARCHAR(250),
+  anchor          VARCHAR(200),
+  is_dofollow     BOOLEAN   DEFAULT TRUE,
+  is_redirect     BOOLEAN   DEFAULT FALSE,
+  crawled_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 ----
 
-create table redirects
+-- auto-generated definition
+CREATE TABLE redirects
 (
-	ids serial not null
-		constraint redirects_ids_pk
-			primary key,
-	domain_id integer not null
-		constraint redirects_domains_ids_fk
-			references domains,
-	page_id integer,
-	redirect_list varchar(150),
-	redirect_raw varchar(500),
-	created_at timestamp default CURRENT_TIMESTAMP
-)
-;
+  ids           SERIAL  NOT NULL
+    CONSTRAINT redirects_ids_pk
+    PRIMARY KEY,
+  domain_id     INTEGER NOT NULL
+    CONSTRAINT redirects_domains_ids_fk
+    REFERENCES domains,
+  page_id       INTEGER,
+  redirect_list VARCHAR(250),
+  redirect_raw  VARCHAR(500),
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
-create table ip_addresses
+----
+
+-- auto-generated definition
+CREATE TABLE ip_addresses
 (
-	ids serial not null
-		constraint ip_addresses_pkey
-			primary key,
-	ip_v4 inet,
-	ip_v6 inet,
-	counter integer default 1
-)
-;
+  ids     SERIAL NOT NULL
+    CONSTRAINT ip_addresses_pkey
+    PRIMARY KEY,
+  ip_v4   INET,
+  ip_v6   INET,
+  counter INTEGER DEFAULT 1
+);
+CREATE UNIQUE INDEX ip_addresses_ids_uindex
+  ON ip_addresses (ids);
+CREATE UNIQUE INDEX ip_addresses_ip_v4_uindex
+  ON ip_addresses (ip_v4);
 
-create unique index ip_addresses_ids_uindex
-	on ip_addresses (ids)
-;
-
-create unique index ip_addresses_ip_v4_uindex
-	on ip_addresses (ip_v4)
-;

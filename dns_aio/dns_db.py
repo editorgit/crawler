@@ -1,6 +1,6 @@
 import asyncio
 import asyncpg
-from datetime import datetime
+from datetime import datetime, date, timedelta
 
 
 class pg:
@@ -8,7 +8,7 @@ class pg:
         self.pg_pool = pg_pool
 
     async def execute(self, sql, *args, **kwargs):
-        print(f"sql_update: {sql}")
+        # print(f"sql_update: {sql}")
         async with self.pg_pool.acquire() as connection:
             return await connection.execute(sql, *args, **kwargs)
 
@@ -18,11 +18,13 @@ class pg:
             return await connection.fetchval(sql, *args, **kwargs)
 
     async def fetch_domains(self, *args, **kwargs):
-        now = datetime.now()
-        sql_select = f"""UPDATE domains SET in_job='{now}' 
-                         WHERE ids IN 
-            (SELECT ids FROM domains WHERE ip_address IS NULL and use_level > 0 LIMIT 300)
-                         RETURNING domain"""
+        now = date.today()
+        days_to_subtract = 30
+        previous = now - timedelta(days=days_to_subtract)
+        sql_select = (f"UPDATE domains SET in_job='{now}' "
+                     "WHERE ids IN (SELECT ids FROM domains "
+                     f"WHERE ip_address IS NULL or ip_address = 0 and last_visit_at > '{previous}' "
+                     "and use_level > 0 LIMIT 300) RETURNING domain")
         # print(f"sql_select: {sql_select}")
         async with self.pg_pool.acquire() as connection:
             return await connection.fetch(sql_select, *args, **kwargs)

@@ -6,7 +6,7 @@ TLDS = ['ee']
 # TLDS = ['lv'] - ok
 # TLDS = ['lt']
 
-MAX_THREADS = 1
+MAX_THREADS = 100
 
 LOW_LIMIT = 500
 
