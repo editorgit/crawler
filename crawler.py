@@ -1,7 +1,5 @@
-import re
 import time
 import logging
-import string
 import json
 import csv
 import re
@@ -118,7 +116,7 @@ class WebSpider:
             url_data.update({'table': source_table})
             await self.q_parse.put(dict(url_data))
 
-    async def update_data(self):
+    async def update_source(self):
         # if domain or pages
         now = datetime.now()
         if self.data['table'] == 'domains':
@@ -131,31 +129,6 @@ class WebSpider:
             sql = f"UPDATE {self.data['table']} " \
                   f"SET http_status_code={self.data['http_status']}, in_job=Null, last_visit_at='{now}' " \
                   f"WHERE ids={self.data['ids']}"
-        return await self.db_conn_dict[str(self.data['db'])].execute(sql)
-
-    async def insert_domains(self):
-        # domains = str(tuple((domain,) for domain in self.domains))[1:-1]
-        sql = f"""INSERT INTO domains (domain)
-                    VALUES {self.domains} ON CONFLICT DO NOTHING"""
-        return await self.db_conn_dict[str(self.data['db'])].execute(sql)
-
-    async def insert_pages(self):
-        sql = f"""INSERT INTO pages (domain_id, max_depth, ip_address, depth, page_url)
-                            VALUES {self.pages} ON CONFLICT DO NOTHING"""
-        return await self.db_conn_dict[str(self.data['db'])].execute(sql)
-
-    async def insert_backlinks(self):
-        sql = "INSERT INTO backlinks (donor_domain_id, donor_page_id, link_to, anchor, is_dofollow)" \
-              "VALUES %s ON CONFLICT DO NOTHING" % self.backlinks
-        return await self.db_conn_dict[str(self.data['db'])].execute(sql)
-
-    async def insert_redirects(self, domain_id, redirects):
-        domain_pk = domain_id if domain_id else self.data['ids']
-        page_id = self.data['ids'] if domain_id else 0
-        redirects = re.sub('['+string.punctuation+']', ' ', str(redirects)[:500])
-        sql = "INSERT INTO redirects (domain_id, page_id, redirect_list, redirect_raw) " \
-              "VALUES (%s, %s, '%s', '%s') " \
-              "ON CONFLICT DO NOTHING" % (domain_pk, page_id, str(self.redirect_list), redirects)
         return await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     def get_parsed_content(self, url):
