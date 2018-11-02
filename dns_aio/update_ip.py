@@ -4,6 +4,12 @@ import uvloop
 import requests
 from datetime import datetime
 
+import sys
+import os.path
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+import settings
+
 from dns_resolver import SwarmResolver
 from dns_db import create_conn_dict
 
@@ -42,8 +48,8 @@ class IpUpdate:
 
             for domain, value in ip_domains.items():
                 if value.startswith('DNS ERROR'):
-                    sql = "UPDATE domains SET in_job=Null, http_status_code=599, ip_address =0, title='%s', last_visit_at='%s' "\
-                          "WHERE domain='%s'" % (value, now, domain)
+                    sql = "UPDATE domains SET in_job=Null, http_status_code=%s, ip_address =0, title='%s', last_visit_at='%s' "\
+                          "WHERE domain='%s'" % (settings.AIO_DNS_ERROR, value, now, domain)
                     await self.db_conn_dict[self.tld].execute(sql)
 
                 else:

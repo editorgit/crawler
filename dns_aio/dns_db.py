@@ -2,6 +2,7 @@ import asyncio
 import asyncpg
 from datetime import datetime, date, timedelta
 
+import settings
 
 class pg:
     def __init__(self, pg_pool):
@@ -22,8 +23,9 @@ class pg:
         days_to_subtract = 30
         previous = now - timedelta(days=days_to_subtract)
         sql_select = (f"UPDATE domains SET in_job='{now}' "
-                     "WHERE ids IN (SELECT ids FROM domains "
-                     f"WHERE ip_address IS NULL or ip_address = 0 and last_visit_at > '{previous}' "
+                      "WHERE ids IN (SELECT ids FROM domains "
+                      f"WHERE (ip_address IS NULL and last_visit_at IS NULL) or "
+            f"(http_status_code = {settings.AIO_DNS_ERROR} and last_visit_at > '{previous}') "
                      "and use_level > 0 LIMIT 300) RETURNING domain")
         # print(f"sql_select: {sql_select}")
         async with self.pg_pool.acquire() as connection:
