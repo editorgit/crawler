@@ -59,6 +59,7 @@ class WebSpider:
 
         self.low_limit = low_limit
         self.lock_queue = False
+        self.sleep = 0
 
         # self.q_crawl = BQueue(capacity=max_crawl)
         self.q_parse = BQueue(capacity=max_parse)
@@ -221,12 +222,23 @@ class WebSpider:
         # self.log.info(f"Queue size: {self.q_parse.qsize()}")
         if not self.lock_queue and self.q_parse.qsize() < settings.LOW_LIMIT and not self.test:
             self.lock_queue = True
-            self.log.warning(f"Queue lock")
-            self.log.warning(f"Queue limit before {self.q_parse.qsize()}: {datetime.now()}")
+            start = self.q_parse.qsize()
+            start_time = datetime.now()
+            self.log.warning(f"Queue update {start}: {start_time}")
             await self.get_urls4crawler()
-            self.log.warning(f"Queue limit after {self.q_parse.qsize()}: {datetime.now()}")
+            stop = self.q_parse.qsize() # if stop == 0, after update queue, need pause
+            stop_time = datetime.now()
+            self.log.warning(f"Queue after update {stop - start}: {stop_time - start_time}\n")
             self.lock_queue = False
-            self.log.warning(f"Queue unlock")
+
+            if stop == 0:
+                self.sleep += 5 * 60 # increase for 5 minute each time when stop == 0
+                time.sleep(self.sleep)
+            else:
+                self.sleep = 0
+
+            if self.sleep > 60 * 60:
+                self.sleep = 60 * 60 # limit for sleep parameter: maximum 1 hour
 
         self.log.info('Parsing: {}'.format(url_data))
 

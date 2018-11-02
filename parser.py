@@ -86,7 +86,7 @@ class NetCrawler(WebSpider):
             # insert_redirects
             redirects = answer.get('redirects', None)
             if redirects:
-                sql = await processing_redirects(redirects, domain_url, self.data)
+                sql = await processing_redirects(redirects, domain_url, url_data, self.data)
                 await self.db_conn_dict[str(self.data['db'])].execute(sql)
 
     async def get_html(self, document):

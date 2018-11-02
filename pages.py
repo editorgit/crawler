@@ -16,7 +16,8 @@ async def processing_pages(pages, url_data):
         pages = str(tuple(
             (url_data['domain_id'], url_data['max_depth'], url_data['ip_id'], depth, page_url) for page_url in pages))[
                      1:-1]
-        if len(pages) == 1:
+
+        if pages[-1:] == ',':
             pages = pages[:-1]
 
 
