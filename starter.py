@@ -9,7 +9,7 @@ from parser import NetCrawler
 if __name__ == '__main__':
 
     test = None
-    # test = {'domain_id': 4081, 'domain': 'tondikad.ee', 'max_depth': 2, 'ip_id': 70, 'table': 'domains'}
+    test = {'page_id': 558789, 'domain_id': 2112, 'page_url': 'http://fcflora.ee/kontakt/kes-on-kes/', 'depth': 2, 'max_depth': 2, 'ip_id': 3, 'table': 'pages'}
 
     concurrency = settings.MAX_THREADS
     low_limit = settings.LOW_LIMIT

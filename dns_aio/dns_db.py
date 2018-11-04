@@ -25,7 +25,7 @@ class pg:
         sql_select = (f"UPDATE domains SET in_job='{now}' "
                       "WHERE ids IN (SELECT ids FROM domains "
                       f"WHERE (ip_address IS NULL and last_visit_at IS NULL) or "
-            f"(http_status_code = {settings.AIO_DNS_ERROR} and last_visit_at > '{previous}') "
+            f"(http_status_code = {settings.AIO_DNS_ERROR} and last_visit_at < '{previous}') "
                      "and use_level > 0 LIMIT 300) RETURNING domain")
         # print(f"sql_select: {sql_select}")
         async with self.pg_pool.acquire() as connection:

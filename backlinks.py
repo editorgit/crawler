@@ -8,7 +8,7 @@ async def processing_backlinks(backlinks, url_data):
 
     # convert to insert to DB
     backlinks = str(tuple(
-        (url_data['domain_id'], page_id, backlink[0][:240], backlink[1].replace("'", ' ')[:190], backlink[2]) for backlink in backlinks))[1:-1]
+        (url_data['domain_id'], page_id, backlink[0][:240], backlink[1].replace("'", ' ')[:180], backlink[2]) for backlink in backlinks))[1:-1]
 
     if backlinks[-1:] == ',':
         backlinks = backlinks[:-1]  # Убираем лишнюю запятую: '(341, 0, 'koerteklubi.ee', 'span', True),'

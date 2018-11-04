@@ -81,7 +81,7 @@ class WebSpider:
         self.backlinks = list()
         self.redirect_list = list()
 
-        logging.basicConfig(level='WARNING')
+        logging.basicConfig(filename="crawler.log", level=settings.LOGGER_LEVEL)
         self.log = logging.getLogger()
 
         if not verbose:
@@ -100,8 +100,8 @@ class WebSpider:
         # if not self.db_list_request:
         db_list_request = list()
         for tld, db_conn in self.db_conn_dict.items():
-            db_list_request.append(db_conn.fetch_domains4crawler())
-            db_list_request.append(db_conn.fetch_pages4crawler())
+            db_list_request.append(db_conn.fetch_domains4crawler(self.log))
+            db_list_request.append(db_conn.fetch_pages4crawler(self.log))
 
         for db_request in asyncio.as_completed(db_list_request):
             await self.update_queue(await db_request)
@@ -149,7 +149,7 @@ class WebSpider:
                 # print(f"response: {response}")
                 if response.content_type.startswith('image'):
                     title = f"Content type: IMAGE"
-                    self.log.info(title)
+                    self.log.debug(title)
                     self.counter['unsuccessful'] += 1
                     answer['http_status'] = 71
                     answer['title'] = title
@@ -213,7 +213,7 @@ class WebSpider:
 
     async def __wait(self, name):
         if self.delay > 0:
-            self.log.info('{} waits for {} sec.'.format(name, self.delay))
+            self.log.debug('{} waits for {} sec.'.format(name, self.delay))
             await asyncio.sleep(self.delay)
 
     async def parse_url(self):
@@ -240,7 +240,7 @@ class WebSpider:
             if self.sleep > 60 * 60:
                 self.sleep = 60 * 60 # limit for sleep parameter: maximum 1 hour
 
-        self.log.info('Parsing: {}'.format(url_data))
+        self.log.debug('Parsing: {}'.format(url_data))
 
         try:
             content = await self.get_parsed_content(url_data)
