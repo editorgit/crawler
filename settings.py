@@ -1,10 +1,7 @@
 
-# TLDS = ['lt', 'lv', 'ee', 'fi']
-TLDS = ['ee']
-# TLDS = ['fi'] - NOT ok
-# TLDS = ['lt'] - ok
-# TLDS = ['lv'] - ok
-# TLDS = ['lt']
+TLDS = ['lt', 'lv', 'ee', 'fi']
+# TLDS = ['ee']
+# TLDS = ['ee', 'fi']
 
 # LOGGER_LEVEL = 'INFO'
 LOGGER_LEVEL = 'WARNING'

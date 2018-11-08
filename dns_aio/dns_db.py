@@ -3,6 +3,7 @@ import asyncpg
 from datetime import datetime, date, timedelta
 
 import settings
+TLDS = ['lt', 'lv', 'ee', 'fi']
 
 class pg:
     def __init__(self, pg_pool):
@@ -46,6 +47,7 @@ async def init_pg(database, user):
 
 async def create_conn_dict():
     db_conn_dict = dict()
-    db_conn_dict['ee'] = await init_pg('spiderbase_ee', 'spidermen')
+    for tld in settings.TLDS:
+        db_conn_dict[tld] = await init_pg(f'spiderbase_{tld}', 'spidermen')
 
     return db_conn_dict

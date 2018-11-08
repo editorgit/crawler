@@ -1,6 +1,25 @@
 aZ/dXtZ*Yf4P+UgJ
 
--- auto-generated definition
+
+-----------------
+CREATE TABLE ip_addresses
+(
+  ids     SERIAL NOT NULL
+    CONSTRAINT ip_addresses_pkey
+    PRIMARY KEY,
+  ip_v4   INET,
+  ip_v6   INET,
+  counter INTEGER DEFAULT 1
+);
+CREATE UNIQUE INDEX ip_addresses_ids_uindex
+  ON ip_addresses (ids);
+CREATE UNIQUE INDEX ip_addresses_ip_v4_uindex
+  ON ip_addresses (ip_v4);
+
+INSERT INTO ip_addresses (ids, ip_v4, counter)
+                VALUES(0, '0.0.0.0', 0);
+
+
 CREATE TABLE domains
 (
   ids              SERIAL       NOT NULL
@@ -24,9 +43,7 @@ CREATE TABLE domains
 CREATE UNIQUE INDEX domains_domain_uindex
   ON domains (domain);
 
-----
 
--- auto-generated definition
 CREATE TABLE pages
 (
   ids              SERIAL       NOT NULL
@@ -51,9 +68,7 @@ CREATE UNIQUE INDEX pages_page_url_uindex
 CREATE INDEX pages_ip_address
   ON pages (ip_address);
 
----
 
--- auto-generated definition
 CREATE TABLE backlinks
 (
   ids             SERIAL  NOT NULL
@@ -71,9 +86,6 @@ CREATE TABLE backlinks
 );
 
 
-----
-
--- auto-generated definition
 CREATE TABLE redirects
 (
   ids           SERIAL  NOT NULL
@@ -87,21 +99,3 @@ CREATE TABLE redirects
   redirect_raw  VARCHAR(500),
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
-----
-
--- auto-generated definition
-CREATE TABLE ip_addresses
-(
-  ids     SERIAL NOT NULL
-    CONSTRAINT ip_addresses_pkey
-    PRIMARY KEY,
-  ip_v4   INET,
-  ip_v6   INET,
-  counter INTEGER DEFAULT 1
-);
-CREATE UNIQUE INDEX ip_addresses_ids_uindex
-  ON ip_addresses (ids);
-CREATE UNIQUE INDEX ip_addresses_ip_v4_uindex
-  ON ip_addresses (ip_v4);
-

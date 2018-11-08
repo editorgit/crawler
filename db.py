@@ -45,45 +45,21 @@ class pg:
             return await connection.fetch(sql_select, *args, **kwargs)
 
 
-async def init_pg():
+async def init_pg(database, user):
     """
     Init Postgresql DB.
     """
     pg_pool = await asyncpg.create_pool(
-        database='spiderbase_ee',
-        user='spidermen',
-        max_size=100,
+        database=database,
+        user=user,
+        max_size=10,
     )
     return pg(pg_pool)
-
-
-db_dict = dict()
-
-
-async def pg_ee():
-    """
-    Init Postgresql DB.
-    """
-    pg_pool = await asyncpg.create_pool(
-        database='spiderbase_ee',
-        user='spidermen',
-        max_size=20,
-    )
-    return pg(pg_pool)
-
-
-async def create_conn_list():
-    db_conn_list = list()
-    db_conn_list.append(await pg_ee())
-
-    return db_conn_list
 
 
 async def create_conn_dict():
     db_conn_dict = dict()
-    db_conn_dict['ee'] = await pg_ee()
+    for tld in settings.TLDS:
+        db_conn_dict[tld] = await init_pg(f'spiderbase_{tld}', 'spidermen')
 
     return db_conn_dict
-
-# loop = asyncio.get_event_loop()
-# db_conn = loop.run_until_complete(init_pg())

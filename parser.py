@@ -28,7 +28,7 @@ class NetCrawler(WebSpider):
 
         ids = url_data['domain_id'] if url_data['table'] == 'domains' else url_data['page_id']
 
-        self.data = {'db': page_tld, 'table': url_data['table'], 'ids': ids}
+        db_data = {'db': str(page_tld), 'table': url_data['table'], 'ids': ids}
 
         # exclude domain or page with incorrect TLD
         if page_tld not in settings.TLDS:
@@ -39,26 +39,26 @@ class NetCrawler(WebSpider):
 
         # insert answer with errors
         if answer.get('http_status', 0) < 100:
-            self.data.update(answer)
-            await self.update_source()
+            db_data.update(answer)
+            await self.update_source(db_data)
             return
 
-        self.data.update({'http_status': answer['http_status']})
+        db_data.update({'http_status': answer['http_status']})
 
         # convert to eetree element
         html_page = await self.get_html(answer.get('document', ''))
 
         # update dict data for domain
-        if self.data['table'] == 'domains':
+        if db_data['table'] == 'domains':
             if html_page is not None:
                 len_content, title = await self.extract_title(html_page)
             else:
                 len_content = 0
                 title = 'No content'
-            self.data.update({'len_content': len_content, 'title': title[:250], 'http_status': answer['http_status']})
+            db_data.update({'len_content': len_content, 'title': title[:250], 'http_status': answer['http_status']})
 
         # update domain or url which was source for this data
-        await self.update_source()
+        await self.update_source(db_data)
 
         # parse page
         if html_page is not None:
@@ -68,7 +68,7 @@ class NetCrawler(WebSpider):
             # insert_domains
             if domains:
                 sql = await processing_domains(domains)
-                await self.db_conn_dict[str(self.data['db'])].execute(sql)
+                await self.db_conn_dict[db_data['db']].execute(sql)
 
             # insert_pages
             # if depth == max we don't gather internal pages
@@ -76,18 +76,18 @@ class NetCrawler(WebSpider):
                 sql = await processing_pages(pages, url_data)
 
                 if sql:
-                    await self.db_conn_dict[str(self.data['db'])].execute(sql)
+                    await self.db_conn_dict[db_data['db']].execute(sql)
 
             # insert_backlinks
             if backlinks:
                 sql = await processing_backlinks(backlinks, url_data)
-                await self.db_conn_dict[str(self.data['db'])].execute(sql)
+                await self.db_conn_dict[db_data['db']].execute(sql)
 
             # insert_redirects
             redirects = answer.get('redirects', None)
             if redirects:
-                sql = await processing_redirects(redirects, domain_url, url_data, self.data)
-                await self.db_conn_dict[str(self.data['db'])].execute(sql)
+                sql = await processing_redirects(redirects, domain_url, url_data, db_data)
+                await self.db_conn_dict[db_data['db']].execute(sql)
 
     async def get_html(self, document):
         html_page = None
@@ -151,8 +151,12 @@ class NetCrawler(WebSpider):
                     internal_link = f"{page_domain}{delimiter}{url}"
 
                 if link_tld == page_tld:
-                    # if uri exist:
-                    urls.add(url)
+                    # if url not domain:
+                    try:
+                        if len(url.split(f'.{page_tld}')[1]) > 1:
+                            urls.add(url)
+                    except IndexError:
+                        pass
                     if host not in url and url not in host:
                         anchor = await self.get_anchor(link)
                         dofollow = await self.get_rel(link)

@@ -44,7 +44,7 @@ class BQueue(asyncio.Queue):
 
 class WebSpider:
 
-    def __init__(self, db_conn, create_conn_dict, concurrency=1, timeout=20,
+    def __init__(self, create_conn_dict, concurrency=1, timeout=20,
                  delay=0, headers=None, verbose=True, cookies=None,
                  max_parse=0, retries=2, test=None, low_limit=10):
 
@@ -117,20 +117,20 @@ class WebSpider:
             url_data.update({'table': source_table})
             await self.q_parse.put(dict(url_data))
 
-    async def update_source(self):
+    async def update_source(self, db_data):
         # if domain or pages
         now = datetime.now()
-        if self.data['table'] == 'domains':
-            title = self.data['title'].replace("'", "")
+        if db_data['table'] == 'domains':
+            title = db_data['title'].replace("'", "")
             sql = "UPDATE domains " \
                   "SET http_status_code=%s, title='%s', in_job=Null, last_visit_at='%s', len_content=%s " \
-                  "WHERE ids=%s" % (self.data['http_status'], title, now,
-                                    self.data.get('len_content', 0), self.data['ids'])
+                  "WHERE ids=%s" % (db_data['http_status'], title, now,
+                                    db_data.get('len_content', 0), db_data['ids'])
         else:
-            sql = f"UPDATE {self.data['table']} " \
-                  f"SET http_status_code={self.data['http_status']}, in_job=Null, last_visit_at='{now}' " \
-                  f"WHERE ids={self.data['ids']}"
-        return await self.db_conn_dict[str(self.data['db'])].execute(sql)
+            sql = f"UPDATE {db_data['table']} " \
+                  f"SET http_status_code={db_data['http_status']}, in_job=Null, last_visit_at='{now}' " \
+                  f"WHERE ids={db_data['ids']}"
+        return await self.db_conn_dict[db_data['db']].execute(sql)
 
     def get_parsed_content(self, url):
         """
@@ -211,6 +211,12 @@ class WebSpider:
             answer['title'] = "URL should be absolute"
             return answer
 
+        except asyncio.TimeoutError:
+            self.counter['unsuccessful'] += 1
+            answer['http_status'] = 58
+            answer['title'] = "asyncio.TimeoutError"
+            return answer
+
     async def __wait(self, name):
         if self.delay > 0:
             self.log.debug('{} waits for {} sec.'.format(name, self.delay))
@@ -245,7 +251,7 @@ class WebSpider:
         try:
             content = await self.get_parsed_content(url_data)
         except Exception:
-            self.log.error(f'Error during parsing: {url_data}',
+            self.log.error(f'\n Error during parsing: {url_data}',
                            exc_info=True)
             # time.sleep(5)
         finally:

@@ -5,7 +5,7 @@ import aiodns
 class SwarmResolver:
     """ A simple class which will resolve a list of domains asyncrionously """
 
-    def __init__(self, num_workers=1, nameservers=['8.8.8.8', '8.8.4.4'], qtype="A"):
+    def __init__(self, num_workers=2, nameservers=['8.8.8.8', '8.8.4.4'], qtype="A"):
         self.num_workers = num_workers
         self.nameservers = nameservers
         self.qtype = qtype
