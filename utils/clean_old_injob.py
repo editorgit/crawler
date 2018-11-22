@@ -40,7 +40,7 @@ class CleanInJob:
             await self.db_conn_dict[db].execute(sql_domains)
             await self.db_conn_dict[db].execute(sql_pages)
 
-        return
+        return 
 
 
 if __name__ == '__main__':

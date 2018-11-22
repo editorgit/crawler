@@ -5,7 +5,7 @@ from domains import to_idna
 
 
 async def processing_pages(pages, url_data):
-    pages = list(page for page in pages if len(page) < 255)
+    pages = list(page for page in pages if len(page) < 254)
     pages = await remove_trash(pages)
     pages = await remove_filelinks(pages)
     pages = await to_idna(pages)

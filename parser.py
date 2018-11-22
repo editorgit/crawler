@@ -193,6 +193,7 @@ class NetCrawler(WebSpider):
 
         try:
             title = html_page.xpath("//title/text()")[0]
+            title = title.replace(';', '').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
         except (AttributeError, IndexError):
             title = ''
         return len_content, title.strip()

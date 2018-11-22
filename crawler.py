@@ -52,6 +52,7 @@ class WebSpider:
         self.headers = headers
         self.cookies = dict()
         self.client = ''
+        self.timeout = timeout
 
         self.concurrency = concurrency
         self.delay = delay
@@ -145,7 +146,7 @@ class WebSpider:
         answer = dict()
         try:
             # async with aiohttp.request(method="GET", url=url, headers=self.headers) as response:
-            async with self.client.get(url) as response:
+            async with self.client.get(url, timeout=self.timeout) as response:
                 # print(f"response: {response}")
                 if response.content_type.startswith('image'):
                     title = f"Content type: IMAGE"
@@ -274,7 +275,8 @@ class WebSpider:
         self.client = aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(verify_ssl=False),
             headers=self.headers,
-            cookies=self.cookies)
+            cookies=self.cookies,
+            conn_timeout=self.timeout)
 
     async def run(self):
         start = time.time()
