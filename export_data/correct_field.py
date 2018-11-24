@@ -19,8 +19,8 @@ def update_field(action):
         cursor = conn.cursor()
 
         table = 'domains'
-        field = 'title'
-        trash = ';'
+        field = 'domain'
+        trash = '\n'
 
         sql = f"SELECT ids, {field} FROM {table} WHERE {field} LIKE '%{trash}%'"
 
@@ -41,7 +41,7 @@ def update_field(action):
         for row in results:
             # cnt += 1
             print(row)
-            field_value = row[1].replace(trash, '')
+            field_value = row[1].replace(trash, ' ')
             # print(f"TITLE: {repr(title)}")
 
             if action == 'replace':

@@ -1,6 +1,10 @@
+#!/usr/bin/env python
 import os, sys
-import requests
+import logging
+import datetime
 import pprint
+
+import requests
 from fabric.connection import Connection
 
 sys.path.append(
@@ -11,6 +15,8 @@ import settings
 from db_sync import get_cursor
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EXPORT_DIR = 'export_data'
+DIR_SCRIPT = os.path.join(BASE_DIR, EXPORT_DIR)
 
 TABLES = ['domains', 'ip_addresses']
 
@@ -18,12 +24,9 @@ REMOTE_HOST = 'station@s3.amygoal.com'
 
 REMOTE_PATH = '/home/station/code/import_spider_data'
 
-# env.hosts = ['station@s3.amygoal.com']
-
 
 def get_path(tld):
-    dir_script = os.path.join(BASE_DIR, 'export_data')
-    return os.path.join(dir_script, tld)
+    return os.path.join(DIR_SCRIPT, tld)
 
 
 def get_snapshots():
@@ -67,11 +70,25 @@ def send_snapshots():
             with Connection(REMOTE_HOST) as conn:
                 conn.run('mkdir -p ' + remote_dir)
                 # print("Create directory")
+
                 conn.put(f"{dir_tld}/{table}.csv", remote_dir)
-                print(f"Send file: {remote_dir}{table}.csv")
+
+                time_tag = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+                print(f"Send file {time_tag}: {remote_dir}{table}.csv")
+                logger.info(f"Send file {time_tag}: {remote_dir}{table}.csv")
 
 
 if __name__ == '__main__':
+    log_path = os.path.join(DIR_SCRIPT, 'export.log')
+    print(f"log_path: {log_path}")
+    logging.basicConfig(filename=log_path, level=logging.INFO)
+    logger = logging.getLogger()
+    time_tag = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+    logging.warning('')
+    logging.warning(f'SEND FILES START: {time_tag}')
 
     get_snapshots()
     send_snapshots()
+
+    time_tag = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
+    logging.warning(f'SEND FILES FINISHED: {time_tag}')
