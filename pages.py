@@ -14,6 +14,9 @@ async def processing_pages(pages, url_data):
 
         depth = 1 if url_data['table'] == 'domains' else url_data['depth'] + 1
 
+        if depth > url_data['max_depth']:
+            return None
+
         # convert to insert to DB
         pages = str(tuple(
             (url_data['domain_id'], url_data['max_depth'], url_data['ip_id'], depth, page_url) for page_url in pages))[

@@ -70,6 +70,7 @@ class WebSpider:
         self.brief = defaultdict(set)
         self.data = dict()
         self.test = test
+        self.stop = False
 
         self.db_conn_dict = None
         self.create_conn_dict = create_conn_dict
@@ -227,7 +228,18 @@ class WebSpider:
         url_data = await self.q_parse.get()
 
         # self.log.info(f"Queue size: {self.q_parse.qsize()}")
-        if not self.lock_queue and self.q_parse.qsize() < settings.LOW_LIMIT and not self.test:
+        self.stop = False
+        start_time = datetime.now()
+        start_pause = start_time.replace(hour=2, minute=00)
+        end_pause = start_time.replace(hour=2, minute=20)
+        # print(f"start_time: {start_time}")
+        # print(f"start_pause: {start_pause}")
+        # print(f"end_pause: {end_pause}")
+
+        if end_pause > start_pause > start_time:
+            self.stop = True
+
+        if not self.lock_queue and self.q_parse.qsize() < settings.LOW_LIMIT and not self.test and not self.stop:
             self.lock_queue = True
             start = self.q_parse.qsize()
             start_time = datetime.now()
@@ -299,6 +311,8 @@ class WebSpider:
                                .format(exc), exc_info=True)
 
         tasks = []
+
+        self.log.warning(f'Concurrency: {self.concurrency}')
 
         for _ in range(self.concurrency):
             fut_parse = asyncio.ensure_future(self.parser())

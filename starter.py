@@ -1,5 +1,6 @@
 import asyncio
 import aiohttp
+import signal
 
 import settings
 from db import create_conn_dict
@@ -7,6 +8,10 @@ from parser import NetCrawler
 
 
 if __name__ == '__main__':
+
+    def handler(loop):
+        loop.remove_signal_handler(signal.SIGTERM)
+        loop.stop()
 
     test = None
     # test = {'domain_id': 18147, 'domain': 'kalbosnamai.lt', 'max_depth': 2, 'ip_id': 13525, 'table': 'domains'}
@@ -21,6 +26,7 @@ if __name__ == '__main__':
                              headers=headers, max_parse=max_parse, test=test, low_limit=low_limit)
 
     loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGTERM, handler, loop)
     try:
         loop.run_until_complete(web_crawler.run())
     finally:

@@ -72,7 +72,7 @@ class NetCrawler(WebSpider):
 
             # insert_pages
             # if depth == max we don't gather internal pages
-            if pages and url_data.get('depth', 0) <= url_data['max_depth']:
+            if pages and url_data.get('depth', 0) < url_data['max_depth']:
                 sql = await processing_pages(pages, url_data)
 
                 if sql:
