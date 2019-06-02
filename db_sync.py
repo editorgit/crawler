@@ -5,11 +5,11 @@ import settings
 
 def get_cursor(database):
     conn = psycopg2.connect(dbname=database, user=settings.DB_USER,
-                            password=settings.DB_PASS, host='localhost')
+                            password=settings.DB_PASS, host=settings.DB_HOST)
     return conn.cursor()
 
 
 def get_connection(database):
     conn = psycopg2.connect(dbname=database, user=settings.DB_USER,
-                            password=settings.DB_PASS, host='localhost')
+                            password=settings.DB_PASS, host=settings.DB_HOST)
     return conn

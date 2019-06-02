@@ -6,6 +6,7 @@ TLDS = ['lt', 'lv', 'ee', 'fi']
 # LOGGER_LEVEL = 'INFO'
 LOGGER_LEVEL = 'WARNING'
 
+DB_HOST = '95.217.8.25'
 DB_USER = 'spidermen'
 DB_PASS = 'aZ/dXtZ*Yf4P+UgJ'
 
