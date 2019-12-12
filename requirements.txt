@@ -27,7 +27,7 @@ idna==2.7
 idna-ssl==1.1.0
 incremental==16.10.1
 invoke==1.2.0
-Jinja2==2.10
+Jinja2==2.10.1
 jsonpatch==1.16
 jsonpointer==1.10
 jsonschema==2.6.0
@@ -51,8 +51,8 @@ pyserial==3.4
 python-apt==1.6.3
 python-dateutil==2.8.0
 python-debian==0.1.32
-PyYAML==3.12
-requests==2.19.1
+PyYAML==4.2b1
+requests==2.20.0
 requests-file==1.4.3
 requests-unixsocket==0.1.5
 service-identity==16.0.0
@@ -61,10 +61,10 @@ ssh-import-id==5.7
 systemd-python==234
 tld==0.9.1
 tldextract==2.2.0
-Twisted==17.9.0
+Twisted==19.7.0
 ufw==0.35
 unattended-upgrades==0.1
-urllib3==1.23
+urllib3==1.24.2
 uvloop==0.11.2
 yarl==1.2.6
 zope.interface==4.3.2
