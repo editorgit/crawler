@@ -3,7 +3,6 @@ import asyncpg
 from datetime import datetime, date, timedelta
 
 import settings
-TLDS = ['lt', 'lv', 'ee', 'fi']
 
 class pg:
     def __init__(self, pg_pool):
@@ -33,13 +32,15 @@ class pg:
             return await connection.fetch(sql_select, *args, **kwargs)
 
 
-async def init_pg(database, user):
+async def init_pg(database, user, password):
     """
     Init Postgresql DB.
     """
     pg_pool = await asyncpg.create_pool(
+        host=settings.DB_HOST,
         database=database,
         user=user,
+        password=password,
         max_size=10,
     )
     return pg(pg_pool)
@@ -48,6 +49,7 @@ async def init_pg(database, user):
 async def create_conn_dict():
     db_conn_dict = dict()
     for tld in settings.TLDS:
-        db_conn_dict[tld] = await init_pg(f'spiderbase_{tld}', 'spidermen')
+        db_conn_dict[tld] = await init_pg(f'spiderbase_{tld}',
+                                          settings.DB_USER, settings.DB_PASS)
 
     return db_conn_dict

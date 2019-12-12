@@ -1,10 +1,11 @@
 
-TLDS = ['lt', 'lv', 'ee', 'fi']
+TLDS = ['lt', 'lv', 'ee', 'fi', 'se', 'no', 'dk']
 # TLDS = ['ee']
 # TLDS = ['ee', 'fi']
 
-# LOGGER_LEVEL = 'INFO'
-LOGGER_LEVEL = 'WARNING'
+# LOGGER_LEVEL = 'DEBUG'
+LOGGER_LEVEL = 'INFO'
+# LOGGER_LEVEL = 'WARNING'
 
 DB_HOST = '95.217.8.25'
 DB_USER = 'spidermen'

@@ -227,7 +227,7 @@ class WebSpider:
     async def parse_url(self):
         url_data = await self.q_parse.get()
 
-        # self.log.info(f"Queue size: {self.q_parse.qsize()}")
+        self.log.info(f"Queue size: {self.q_parse.qsize()}")
         self.stop = False
         start_time = datetime.now()
         start_pause = start_time.replace(hour=2, minute=00)
@@ -253,11 +253,13 @@ class WebSpider:
             if stop == 0:
                 self.sleep += 5 * 60 # increase for 5 minute each time when stop == 0
                 time.sleep(self.sleep)
+                self.log.warning("Queue size is 0, sleep 5 minute")
             else:
                 self.sleep = 0
 
             if self.sleep > 60 * 60:
                 self.sleep = 60 * 60 # limit for sleep parameter: maximum 1 hour
+                self.log.warning("self.sleep is too big, sleep 60 minute")
 
         self.log.debug('Parsing: {}'.format(url_data))
 
