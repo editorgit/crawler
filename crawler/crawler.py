@@ -18,6 +18,7 @@ from parser.parser import PageParser
 
 logging.basicConfig(filename=settings.LOG_CRAWLER, level=settings.LOGGER_LEVEL, format=settings.FORMAT)
 
+
 class BQueue(asyncio.Queue):
     """ Bureaucratic queue """
 
@@ -66,8 +67,6 @@ class WebSpider:
         self.concurrency = concurrency
         self.delay = delay
         self.retries = retries
-
-        self.low_limit = low_limit
         self.lock_queue = False
         self.sleep = 0
 
@@ -75,22 +74,13 @@ class WebSpider:
         self.q_parse = BQueue(capacity=max_parse)
 
         self.counter = dict({'successful': 0, 'unsuccessful': 0})
-
-        self.brief = defaultdict(set)
-        self.data = dict()
         self.test = test
         self.stop = False
 
-        self.db_conn_dict = None
+        self.db_conn_dict = dict()
         self.create_conn_dict = create_conn_dict
 
         self.can_parse = True
-        self.db_list_request = list()
-
-        self.domains = list()
-        self.pages = list()
-        self.backlinks = list()
-        self.redirect_list = list()
         self.log = logging.getLogger()
 
         if not verbose:
@@ -106,7 +96,6 @@ class WebSpider:
         """
         Get URLS from DB and put them in Queue
         """
-        # if not self.db_list_request:
         db_list_request = list()
         for tld, db_conn in self.db_conn_dict.items():
             db_list_request.append(db_conn.fetch_domains4crawler(self.log))
@@ -122,30 +111,11 @@ class WebSpider:
         """
         for url_data in url_list:
             url_data = dict(url_data)
-            source_table = 'domains' if url_data.get('page_url', False) == False else 'pages'
+            source_table = 'domains' if url_data.get('page_url', False) is False else 'pages'
             url_data.update({'table': source_table})
             await self.q_parse.put(dict(url_data))
 
-    async def update_source(self, db_data):
-        sql = await self.sql_update_source(db_data)
-        await self.db_conn_dict[db_data['db']].execute(sql)
-
-    async def sql_update_source(self, db_data):
-        # if domain or pages
-        now = datetime.now()
-        if db_data['table'] == 'domains':
-            title = db_data['title'].replace("'", "")
-            sql = "UPDATE domains " \
-                  "SET http_status_code=%s, title='%s', in_job=Null, last_visit_at='%s', len_content=%s " \
-                  "WHERE ids=%s" % (db_data['http_status'], title, now,
-                                    db_data.get('len_content', 0), db_data['ids'])
-        else:
-            sql = f"UPDATE {db_data['table']} " \
-                  f"SET http_status_code={db_data['http_status']}, in_job=Null, last_visit_at='{now}' " \
-                  f"WHERE ids={db_data['ids']}"
-        return sql
-
-    async def get_parsed_content(self, url_data):
+    async def parse(self, url_data):
         url_to_parse = await self.get_correct_url(url_data)
         domain_url, page_tld = await self.get_url_data(url_to_parse)
 
@@ -153,20 +123,18 @@ class WebSpider:
         if page_tld not in settings.TLDS:
             return
 
-        ids = url_data['domain_id'] if url_data['table'] == 'domains' else url_data['page_id']
-        db_data = {'db': str(page_tld), 'table': url_data['table'], 'ids': ids}
-
         # get page
-        answer = await self.get_html_from_url(url_to_parse)
+        answer = await self.request_url(url_to_parse)
+        # parse page
+        await self.parser().parse_content(self.db_conn_dict, url_data, answer, domain_url, page_tld)
 
-        await self.parser().parse_content(self.update_source, self.db_conn_dict, db_data, url_data, answer, domain_url)
-
+    @staticmethod
     async def get_url_data(self, url_to_parse) -> Tuple:
         domain_url = '.'.join(tldextract.extract(url_to_parse)[1:3])
         page_tld = tldextract.extract(url_to_parse)[2]
         return domain_url, page_tld
 
-    async def get_html_from_url(self, url):
+    async def request_url(self, url):
         # print(f"url: {url}")
         answer = dict()
         try:
@@ -273,6 +241,7 @@ class WebSpider:
         if end_pause > start_pause > start_time:
             self.stop = True
 
+        # TODO: need replace with Redis
         if not self.lock_queue and self.q_parse.qsize() < settings.LOW_LIMIT and not self.test and not self.stop:
             self.lock_queue = True
             start = self.q_parse.qsize()
@@ -298,7 +267,7 @@ class WebSpider:
         self.log.debug('Parsing: {}'.format(url_data))
 
         try:
-            content = await self.get_parsed_content(url_data)
+            content = await self.parse(url_data)
         except Exception:
             self.log.error(f'\n Error during parsing: {url_data}',
                            exc_info=True)
@@ -363,12 +332,8 @@ class WebSpider:
         # await aiohttp.ClientSession.close()
 
         end = time.time()
-        print('Done in {} seconds'.format(end - start))
-
-        # assert len(self.brief['parsing']) == len(self.data), \
-        #     'Parsing length does not equal parsed length'
-
+        self.log.info('Done in {} seconds'.format(end - start))
         self.log.info(f"Successful: {self.counter['successful']}")
         self.log.info(f"Unsuccessful: {self.counter['unsuccessful']}")
         self.log.info(f"Total parsed: {self.counter['unsuccessful'] + self.counter['successful']}")
-        print('Task done!')
+        self.log.info('Task done!')

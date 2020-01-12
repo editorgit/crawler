@@ -1,5 +1,7 @@
 import asyncio
 import logging
+
+from _datetime import datetime
 import tldextract
 from lxml import html, etree
 from urllib.parse import urldefrag, unquote
@@ -20,36 +22,49 @@ class PageParser:
     html_page: str = ""
     log = logging.getLogger()
 
-    async def parse_content(self, update_source, db_conn_dict, db_data, url_data, answer, domain_url):
+    def __init__(self):
+        self.db_conn_dict = dict()
+        self.db_data = dict()
+
+    async def set_db_conn_dict(self, db_conn_dict):
+        self.db_conn_dict = db_conn_dict
+
+    async def set_db_data(self, url_data, page_tld):
+        ids = url_data['domain_id'] if url_data['table'] == 'domains' else url_data['page_id']
+        self.db_data = {'db': str(page_tld), 'table': url_data['table'], 'ids': ids}
+
+    async def parse_content(self, db_conn_dict, url_data, answer, domain_url, page_tld):
+        await self.set_db_conn_dict(db_conn_dict)
+        await self.set_db_data(url_data, page_tld)
+
         # insert answer with errors
         if answer.get('http_status', 0) < 100:
-            db_data.update(answer)
-            await update_source(db_data)
+            self.db_data.update(answer)
+            await self.update_source()
             return
 
-        db_data.update({'http_status': answer['http_status']})
+        # update data for source
+        await self.update_source_data(answer)
 
         # convert to eetree element
         self.html_page = await self.get_html(answer.get('document', ''))
 
-        # update dict data for domain
-        await self.update_domain_data(db_data, update_source, answer['http_status'])
-
         # parse page
         if self.html_page is not None:
-            await self.parse_page(db_conn_dict, db_data, url_data, answer, domain_url)
+            await self.parse_page(url_data, answer, domain_url)
 
-    async def update_domain_data(self, db_data, update_source, http_status):
-        if db_data['table'] == 'domains':
+    async def update_source_data(self, answer):
+        if self.db_data['table'] == 'domains':
+            len_content = 0
+            title = 'No content'
+
             if self.html_page is not None:
                 len_content, title = await self.extract_title()
-            else:
-                len_content = 0
-                title = 'No content'
-            db_data.update({'len_content': len_content, 'title': title[:250], 'http_status': http_status})
+
+            self.db_data.update({'len_content': len_content, 'title': title[:250], 'http_status': answer['http_status']})
 
         # update domain or url which was source for this data
-        await update_source(db_data)
+        await self.update_source()
 
     async def get_html(self, document):
         html_page = None
@@ -71,9 +86,9 @@ class PageParser:
 
         return html_page
 
-    async def parse_page(self, db_conn_dict, db_data, url_data, answer, domain_url):
+    async def parse_page(self, url_data, answer, domain_url):
         domains, pages, backlinks, redirects = await self.get_data_from_page(
-            self, db_data['db'],
+            self, self.db_data['db'],
             answer['host'],
             answer['real_url']
         )
@@ -81,7 +96,7 @@ class PageParser:
         # insert_domains
         if domains:
             sql = await processing_domains(domains)
-            await db_conn_dict[db_data['db']].execute(sql)
+            await self.db_conn_dict[self.db_data['db']].execute(sql)
 
         # insert_pages
         # if depth == max we don't gather internal pages
@@ -89,20 +104,18 @@ class PageParser:
             sql = await processing_pages(pages, url_data)
 
             if sql:
-                await db_conn_dict[db_data['db']].execute(sql)
+                await self.db_conn_dict[self.db_data['db']].execute(sql)
 
         # insert_backlinks
         if backlinks:
             sql = await processing_backlinks(backlinks, url_data)
-            await db_conn_dict[db_data['db']].execute(sql)
+            await self.db_conn_dict[self.db_data['db']].execute(sql)
 
         # insert_redirects
         redirects = answer.get('redirects', None)
         if redirects:
             sql = await processing_redirects(redirects, domain_url, url_data, db_data)
-            await db_conn_dict[db_data['db']].execute(sql)
-
-
+            await self.db_conn_dict[self.db_data['db']].execute(sql)
 
     @staticmethod
     async def get_data_from_page(self, page_tld, host, page_domain):
@@ -127,7 +140,7 @@ class PageParser:
 
             url = url.split('@')[-1:][0]  # remove mailto part
 
-            if url == page_domain: # skip this option
+            if url == page_domain:  # skip this option
                 continue
 
             if len(url) > len(page_tld) + 1 :
@@ -161,7 +174,6 @@ class PageParser:
                             domains.add(domain)
                 elif internal_link:
                     urls.add(internal_link)
-
         return domains, urls, backlinks, redirects
 
     async def extract_title(self):
@@ -193,7 +205,6 @@ class PageParser:
 
                 if anchor:
                     return anchor[:199]
-
         return ''
 
     @staticmethod
@@ -205,7 +216,6 @@ class PageParser:
                 dofollow = False
         except IndexError:
             pass
-
         return dofollow
 
     @staticmethod
@@ -214,3 +224,22 @@ class PageParser:
             end_declaration = document.find('?>')
             return document[end_declaration + 2:]
         return document
+
+    async def update_source(self):
+        sql = await self.sql_update_source()
+        await self.db_conn_dict[self.db_data['db']].execute(sql)
+
+    async def sql_update_source(self):
+        # if domain or pages
+        now = datetime.now()
+        if self.db_data['table'] == 'domains':
+            title = self.db_data['title'].replace("'", "")
+            sql = "UPDATE domains " \
+                  "SET http_status_code=%s, title='%s', in_job=Null, last_visit_at='%s', len_content=%s " \
+                  "WHERE ids=%s" % (self.db_data['http_status'], title, now,
+                                    self.db_data.get('len_content', 0), self.db_data['ids'])
+        else:
+            sql = f"UPDATE {self.db_data['table']} " \
+                  f"SET http_status_code={self.db_data['http_status']}, in_job=Null, last_visit_at='{now}' " \
+                  f"WHERE ids={self.db_data['ids']}"
+        return sql

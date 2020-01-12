@@ -23,7 +23,7 @@ if __name__ == '__main__':
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit 537.36 (KHTML, like Gecko) Chrome",
                "Accept": "text/html,application/xhtml+xml, application/xml;q=0.9,image/webp,*/*;q=0.8"}
     web_crawler = WebSpider(create_conn_dict, concurrency, timeout=15, verbose=True,
-                             headers=headers, max_parse=max_parse, test=test, low_limit=low_limit)
+                            headers=headers, max_parse=max_parse, test=test, low_limit=low_limit)
 
     loop = asyncio.get_event_loop()
     loop.add_signal_handler(signal.SIGTERM, handler, loop)
