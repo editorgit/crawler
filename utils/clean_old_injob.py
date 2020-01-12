@@ -1,16 +1,13 @@
-import pprint
 import asyncio
 import uvloop
-import requests
-from datetime import datetime, date, timedelta
+from datetime import date
 
 import sys
 import os.path
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
-import settings
 
-from db import create_conn_dict
+from database.db import create_conn_dict
 
 
 class CleanInJob:

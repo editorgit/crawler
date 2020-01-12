@@ -2,9 +2,7 @@
 import os, sys
 import logging
 import datetime
-import pprint
 
-import requests
 from fabric.connection import Connection
 
 sys.path.append(
@@ -12,7 +10,7 @@ sys.path.append(
 
 import settings
 
-from db_sync import get_cursor
+from database.db_sync import get_cursor
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXPORT_DIR = 'export_data'
@@ -81,7 +79,7 @@ def send_snapshots():
 if __name__ == '__main__':
     log_path = os.path.join(DIR_SCRIPT, 'export.log')
     print(f"log_path: {log_path}")
-    logging.basicConfig(filename=log_path, level=logging.INFO)
+    logging.basicConfig(filename='/home/spidermen/spider/logs/export_data/export.log', level=logging.INFO)
     logger = logging.getLogger()
     time_tag = datetime.datetime.now().strftime('%d.%m.%Y %H:%M')
     logging.warning('')

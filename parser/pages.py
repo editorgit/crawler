@@ -1,7 +1,5 @@
-import asyncio
-
 import settings
-from domains import to_idna
+from parser.domains import to_idna
 
 
 async def processing_pages(pages, url_data):
@@ -25,7 +23,6 @@ async def processing_pages(pages, url_data):
         if pages[-1:] == ',':
             pages = pages[:-1]
 
-
         sql = f"""INSERT INTO pages (domain_id, max_depth, ip_address, depth, page_url) VALUES {pages} ON CONFLICT DO NOTHING"""
 
         return sql
@@ -47,7 +44,7 @@ async def remove_filelinks(lst):
     """Split elem by # and return first part"""
     # print(filetypes)
     for index, elem in enumerate(lst):
-        for file_type in settings.FILETYPES:
+        for file_type in settings.FILE_TYPES:
             if elem[-len(file_type):].lower() == file_type:
                 lst[index] = None
                 # print(elem, file_type, lst[index])

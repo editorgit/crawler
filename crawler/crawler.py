@@ -1,15 +1,22 @@
+import os
 import time
 import logging
 import json
 import csv
 import re
 import asyncio
+from typing import Tuple
+
 import aiohttp
 from collections import defaultdict
 from datetime import datetime
 
-import settings
+from tldextract import tldextract
 
+import settings
+from parser.parser import PageParser
+
+logging.basicConfig(filename=settings.LOG_CRAWLER, level=settings.LOGGER_LEVEL, format=settings.FORMAT)
 
 class BQueue(asyncio.Queue):
     """ Bureaucratic queue """
@@ -44,10 +51,12 @@ class BQueue(asyncio.Queue):
 
 class WebSpider:
 
+    html_page: str = ""
+    parser = PageParser
+
     def __init__(self, create_conn_dict, concurrency=1, timeout=20,
                  delay=0, headers=None, verbose=True, cookies=None,
                  max_parse=0, retries=2, test=None, low_limit=10):
-
 
         self.headers = headers
         self.cookies = dict()
@@ -82,8 +91,6 @@ class WebSpider:
         self.pages = list()
         self.backlinks = list()
         self.redirect_list = list()
-
-        logging.basicConfig(filename="crawler.log", level=settings.LOGGER_LEVEL)
         self.log = logging.getLogger()
 
         if not verbose:
@@ -120,6 +127,10 @@ class WebSpider:
             await self.q_parse.put(dict(url_data))
 
     async def update_source(self, db_data):
+        sql = await self.sql_update_source(db_data)
+        await self.db_conn_dict[db_data['db']].execute(sql)
+
+    async def sql_update_source(self, db_data):
         # if domain or pages
         now = datetime.now()
         if db_data['table'] == 'domains':
@@ -132,15 +143,28 @@ class WebSpider:
             sql = f"UPDATE {db_data['table']} " \
                   f"SET http_status_code={db_data['http_status']}, in_job=Null, last_visit_at='{now}' " \
                   f"WHERE ids={db_data['ids']}"
-        return await self.db_conn_dict[db_data['db']].execute(sql)
+        return sql
 
-    def get_parsed_content(self, url):
-        """
-        :param url: an url from which html will be parsed.
-        :return: it has to return a dict with data.
-        It must be a coroutine.
-        """
-        raise NotImplementedError
+    async def get_parsed_content(self, url_data):
+        url_to_parse = await self.get_correct_url(url_data)
+        domain_url, page_tld = await self.get_url_data(url_to_parse)
+
+        # exclude domain or page with incorrect TLD
+        if page_tld not in settings.TLDS:
+            return
+
+        ids = url_data['domain_id'] if url_data['table'] == 'domains' else url_data['page_id']
+        db_data = {'db': str(page_tld), 'table': url_data['table'], 'ids': ids}
+
+        # get page
+        answer = await self.get_html_from_url(url_to_parse)
+
+        await self.parser().parse_content(self.update_source, self.db_conn_dict, db_data, url_data, answer, domain_url)
+
+    async def get_url_data(self, url_to_parse) -> Tuple:
+        domain_url = '.'.join(tldextract.extract(url_to_parse)[1:3])
+        page_tld = tldextract.extract(url_to_parse)[2]
+        return domain_url, page_tld
 
     async def get_html_from_url(self, url):
         # print(f"url: {url}")
@@ -224,6 +248,19 @@ class WebSpider:
             self.log.debug('{} waits for {} sec.'.format(name, self.delay))
             await asyncio.sleep(self.delay)
 
+    @staticmethod
+    async def get_correct_url(url_data):
+        if url_data.get('table', None) == 'domains':
+            return f"http://{url_data['domain']}"
+
+        if url_data['page_url'].startswith('//'):
+            return f"http:{url_data['page_url']}"
+
+        if not url_data['page_url'].startswith('http'):
+            return f"http://{url_data['page_url']}"
+
+        return url_data['page_url']
+
     async def parse_url(self):
         url_data = await self.q_parse.get()
 
@@ -232,9 +269,6 @@ class WebSpider:
         start_time = datetime.now()
         start_pause = start_time.replace(hour=2, minute=00)
         end_pause = start_time.replace(hour=2, minute=20)
-        # print(f"start_time: {start_time}")
-        # print(f"start_pause: {start_pause}")
-        # print(f"end_pause: {end_pause}")
 
         if end_pause > start_pause > start_time:
             self.stop = True
@@ -272,7 +306,7 @@ class WebSpider:
         finally:
             self.q_parse.task_done()
 
-    async def parser(self):
+    async def requester(self):
         retries = self.retries
         while True:
             if self.can_parse:
@@ -317,7 +351,7 @@ class WebSpider:
         self.log.warning(f'Concurrency: {self.concurrency}')
 
         for _ in range(self.concurrency):
-            fut_parse = asyncio.ensure_future(self.parser())
+            fut_parse = asyncio.ensure_future(self.requester())
             fut_parse.add_done_callback(task_completed)
             tasks.append(fut_parse)
 
