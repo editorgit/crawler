@@ -26,53 +26,55 @@ class PageParser:
         self.db_conn_dict = dict()
         self.db_data = dict()
 
-    async def set_db_conn_dict(self, db_conn_dict):
+    async def _set_db_conn_dict(self, db_conn_dict):
         self.db_conn_dict = db_conn_dict
 
-    async def set_db_data(self, url_data, page_tld):
+    async def _set_db_data(self, url_data, page_tld):
         ids = url_data['domain_id'] if url_data['table'] == 'domains' else url_data['page_id']
         self.db_data = {'db': str(page_tld), 'table': url_data['table'], 'ids': ids}
 
     async def parse_content(self, db_conn_dict, url_data, answer, domain_url, page_tld):
-        await self.set_db_conn_dict(db_conn_dict)
-        await self.set_db_data(url_data, page_tld)
+        await self._set_db_conn_dict(db_conn_dict)
+        await self._set_db_data(url_data, page_tld)
 
         # insert answer with errors
         if answer.get('http_status', 0) < 100:
             self.db_data.update(answer)
-            await self.update_source()
+            await self._update_source()
             return
 
         # update data for source
-        await self.update_source_data(answer)
+        await self._update_source_data(answer)
 
         # convert to eetree element
-        self.html_page = await self.get_html(answer.get('document', ''))
+        self.html_page = await self._get_html(answer.get('document', ''))
 
         # parse page
         if self.html_page is not None:
             await self.parse_page(url_data, answer, domain_url)
 
-    async def update_source_data(self, answer):
+    async def _update_source_data(self, answer):
         if self.db_data['table'] == 'domains':
             len_content = 0
             title = 'No content'
 
             if self.html_page is not None:
-                len_content, title = await self.extract_title()
+                len_content, title = await self._extract_title()
 
             self.db_data.update({'len_content': len_content, 'title': title[:250], 'http_status': answer['http_status']})
+        else:
+            self.db_data.update({'http_status': answer['http_status']})
 
         # update domain or url which was source for this data
-        await self.update_source()
+        await self._update_source()
 
-    async def get_html(self, document):
+    async def _get_html(self, document):
         html_page = None
 
         if not len(document):
             return
 
-        document = self.remove_xml_declaration(document)
+        document = self._remove_xml_declaration(document)
         try:
             html_page = html.fromstring(document)
         except etree.ParserError as exc:
@@ -87,7 +89,7 @@ class PageParser:
         return html_page
 
     async def parse_page(self, url_data, answer, domain_url):
-        domains, pages, backlinks, redirects = await self.get_data_from_page(
+        domains, pages, backlinks, redirects = await self._get_data_from_page(
             self, self.db_data['db'],
             answer['host'],
             answer['real_url']
@@ -114,11 +116,11 @@ class PageParser:
         # insert_redirects
         redirects = answer.get('redirects', None)
         if redirects:
-            sql = await processing_redirects(redirects, domain_url, url_data, db_data)
+            sql = await processing_redirects(redirects, domain_url, url_data, self.db_data)
             await self.db_conn_dict[self.db_data['db']].execute(sql)
 
     @staticmethod
-    async def get_data_from_page(self, page_tld, host, page_domain):
+    async def _get_data_from_page(self, page_tld, host, page_domain):
         urls = set()
         domains = set()
         backlinks = set()
@@ -166,8 +168,8 @@ class PageParser:
                     except IndexError:
                         pass
                     if host not in url and url not in host:
-                        anchor = await self.get_anchor(link)
-                        dofollow = await self.get_rel(link)
+                        anchor = await self._get_anchor(link)
+                        dofollow = await self._get_rel(link)
                         backlinks.add((url[:249], anchor, dofollow))
                         domain = '.'.join(link_url[1:3])
                         if len(domain) < 64: # check for maximum domain length
@@ -176,7 +178,7 @@ class PageParser:
                     urls.add(internal_link)
         return domains, urls, backlinks, redirects
 
-    async def extract_title(self):
+    async def _extract_title(self):
         """Extract title and len(html) from html"""
 
         try:
@@ -192,7 +194,7 @@ class PageParser:
         return len_content, title.strip()
 
     @staticmethod
-    async def get_anchor(link):
+    async def _get_anchor(link):
         anchor = img = ''
 
         for element in link.iter():
@@ -208,7 +210,7 @@ class PageParser:
         return ''
 
     @staticmethod
-    async def get_rel(link):
+    async def _get_rel(link):
         dofollow = True
         try:
             rel = link.xpath('./@rel')[0]
@@ -219,17 +221,17 @@ class PageParser:
         return dofollow
 
     @staticmethod
-    def remove_xml_declaration(document):
+    def _remove_xml_declaration(document):
         if document.startswith('<?xml'):
             end_declaration = document.find('?>')
             return document[end_declaration + 2:]
         return document
 
-    async def update_source(self):
-        sql = await self.sql_update_source()
+    async def _update_source(self):
+        sql = await self._sql_update_source()
         await self.db_conn_dict[self.db_data['db']].execute(sql)
 
-    async def sql_update_source(self):
+    async def _sql_update_source(self):
         # if domain or pages
         now = datetime.now()
         if self.db_data['table'] == 'domains':

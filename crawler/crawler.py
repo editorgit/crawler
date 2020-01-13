@@ -40,10 +40,10 @@ class BQueue(asyncio.Queue):
         self.put_counter = 0
         self.is_reached = False
 
-    def put_nowait(self, item):
+    def _put_nowait(self, item):
 
         if not self.is_reached:
-            super().put_nowait(item)
+            super()._put_nowait(item)
             self.put_counter += 1
 
             if 0 < self.capacity == self.put_counter:
@@ -86,7 +86,7 @@ class WebSpider:
         if not verbose:
             self.log.disabled = True
 
-    async def create_connections(self):
+    async def _create_connections(self):
         """
         Create DB connections
         """
@@ -102,9 +102,9 @@ class WebSpider:
             db_list_request.append(db_conn.fetch_pages4crawler(self.log))
 
         for db_request in asyncio.as_completed(db_list_request):
-            await self.update_queue(await db_request)
+            await self._update_queue(await db_request)
 
-    async def update_queue(self, url_list):
+    async def _update_queue(self, url_list):
         """
         :param url_list
         :update: queue
@@ -116,8 +116,8 @@ class WebSpider:
             await self.q_parse.put(dict(url_data))
 
     async def parse(self, url_data):
-        url_to_parse = await self.get_correct_url(url_data)
-        domain_url, page_tld = await self.get_url_data(url_to_parse)
+        url_to_parse = await self._get_correct_url(url_data)
+        domain_url, page_tld = await self._get_url_data(url_to_parse)
 
         # exclude domain or page with incorrect TLD
         if page_tld not in settings.TLDS:
@@ -129,13 +129,12 @@ class WebSpider:
         await self.parser().parse_content(self.db_conn_dict, url_data, answer, domain_url, page_tld)
 
     @staticmethod
-    async def get_url_data(self, url_to_parse) -> Tuple:
+    async def _get_url_data(url_to_parse) -> Tuple:
         domain_url = '.'.join(tldextract.extract(url_to_parse)[1:3])
         page_tld = tldextract.extract(url_to_parse)[2]
         return domain_url, page_tld
 
     async def request_url(self, url):
-        # print(f"url: {url}")
         answer = dict()
         try:
             # async with aiohttp.request(method="GET", url=url, headers=self.headers) as response:
@@ -217,7 +216,7 @@ class WebSpider:
             await asyncio.sleep(self.delay)
 
     @staticmethod
-    async def get_correct_url(url_data):
+    async def _get_correct_url(url_data):
         if url_data.get('table', None) == 'domains':
             return f"http://{url_data['domain']}"
 
@@ -232,7 +231,9 @@ class WebSpider:
     async def parse_url(self):
         url_data = await self.q_parse.get()
 
-        self.log.info(f"Queue size: {self.q_parse.qsize()}")
+        if self.q_parse.qsize() % 100 == 0:
+            self.log.info(f"Queue size: {self.q_parse.qsize()}")
+
         self.stop = False
         start_time = datetime.now()
         start_pause = start_time.replace(hour=2, minute=00)
@@ -275,7 +276,7 @@ class WebSpider:
         finally:
             self.q_parse.task_done()
 
-    async def requester(self):
+    async def _requester(self):
         retries = self.retries
         while True:
             if self.can_parse:
@@ -288,7 +289,7 @@ class WebSpider:
             await self.__wait('Parser')
         return
 
-    async def create_session(self):
+    async def _create_session(self):
         self.client = aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(verify_ssl=False),
             headers=self.headers,
@@ -299,8 +300,8 @@ class WebSpider:
         start = time.time()
 
         self.log.warning(f'Start working: {datetime.now()}')
-        await self.create_session()
-        await self.create_connections()
+        await self._create_session()
+        await self._create_connections()
 
         if self.test:
             await self.q_parse.put(self.test)
@@ -320,7 +321,7 @@ class WebSpider:
         self.log.warning(f'Concurrency: {self.concurrency}')
 
         for _ in range(self.concurrency):
-            fut_parse = asyncio.ensure_future(self.requester())
+            fut_parse = asyncio.ensure_future(self._requester())
             fut_parse.add_done_callback(task_completed)
             tasks.append(fut_parse)
 

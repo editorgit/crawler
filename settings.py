@@ -8,6 +8,7 @@ DB_USER = 'spidermen'
 DB_PASS = 'aZ/dXtZ*Yf4P+UgJ'
 
 MAX_THREADS = 100
+# MAX_THREADS = 2
 
 AIO_DNS_ERROR = 599
 
