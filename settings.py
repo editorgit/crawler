@@ -1,6 +1,6 @@
 import os
 TLDS = ['lt', 'lv', 'ee', 'fi', 'se', 'no', 'dk']
-# TLDS = ['ee']
+# TLDS = ['fi']
 # TLDS = ['ee', 'fi']
 
 DB_HOST = '95.217.8.25'
@@ -31,6 +31,5 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGGER_LEVEL = 'INFO'
 # LOGGER_LEVEL = 'WARNING'
 
-LOG_CRAWLER = os.path.join(BASE_DIR, 'spider/logs/crawler/crawler.log')
-LOG_PARSER = os.path.join(BASE_DIR, 'spider/logs/crawler/parser.log')
-FORMAT = '%(asctime)-15s %(message)s'
+LOGGER_PATH = os.path.join(BASE_DIR, 'spider/logs/crawler/crawler.log')
+LOGGER_FORMAT = '%(asctime)-15s %(message)s'

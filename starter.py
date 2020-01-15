@@ -1,33 +1,83 @@
 import asyncio
-import signal
+import itertools as it
+import os
+import random
+import time
+import logging
 
 import settings
-from crawler.crawler import WebSpider
-from database.db import create_conn_dict
+from database.get_urls import GetUrls
+
+from requester import Requester
+
+logging.basicConfig(filename=settings.LOGGER_PATH, level=settings.LOGGER_LEVEL, format=settings.LOGGER_FORMAT)
+LOGGER = logging.getLogger()
 
 
-if __name__ == '__main__':
+def task_completed(future):
+    # This function should never be called in right case.
+    # The only reason why it is invoking is uncaught exception.
+    exc = future.exception()
+    if exc:
+        LOGGER.error('Worker has finished with error: {} '
+                       .format(exc), exc_info=True)
 
-    def handler(loop):
-        loop.remove_signal_handler(signal.SIGTERM)
-        loop.stop()
 
-    test = None
-    # test = {'domain_id': 18147, 'domain': 'kalbosnamai.lt', 'max_depth': 2, 'ip_id': 13525, 'table': 'domains'}
-    # test = {'page_id': 11534948, 'domain_id': 10656, 'page_url': 'http://www.portofventspils.lv/ru/', 'depth': 3,
-    #         'max_depth': 2, 'ip_id': 8177, 'table': 'pages'}
+async def start_produce(requester: Requester, queue: asyncio.Queue) -> None:
+    await update_queue(requester.db_connector, queue)
 
-    concurrency = settings.MAX_THREADS if not test else 1
-    low_limit = settings.LOW_LIMIT
-    max_parse = 0
-    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit 537.36 (KHTML, like Gecko) Chrome",
-               "Accept": "text/html,application/xhtml+xml, application/xml;q=0.9,image/webp,*/*;q=0.8"}
-    web_crawler = WebSpider(create_conn_dict, concurrency, timeout=15, verbose=True,
-                            headers=headers, max_parse=max_parse, test=test, low_limit=low_limit)
 
-    loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, handler, loop)
-    try:
-        loop.run_until_complete(web_crawler.run())
-    finally:
-        loop.close()
+async def update_queue(db_connector: GetUrls, queue: asyncio.Queue) -> None:
+    await db_connector.get_urls4crawler(queue)
+
+
+async def consume(name: int, requester: Requester, queue: asyncio.Queue) -> None:
+
+    while True:
+        url_data = await queue.get()
+
+        # Periodical log
+        if queue.qsize() % 300 == 0:
+            LOGGER.info(f"Consumer {name} got {url_data} from queue.")
+            LOGGER.info(f"Queue size: {queue.qsize()}")
+
+        if queue.qsize() < settings.LOW_LIMIT:
+            await update_queue(requester.db_connector, queue)
+
+        LOGGER.debug('Parsing: {}'.format(url_data))
+
+        try:
+            await requester.url_handler(url_data)
+        except Exception:
+            LOGGER.error(f'\n Error during parsing: {url_data}', exc_info=True)
+        finally:
+            queue.task_done()
+
+
+async def main():
+    # init queue
+    queue = asyncio.Queue()
+
+    # init DB connector
+    db_connector = GetUrls()
+    await db_connector.create_connections(LOGGER)
+
+    # init URL handler
+    requester = Requester(LOGGER, db_connector)
+
+    # Producer
+    await start_produce(requester, queue)
+
+    # Consumers
+    consumers = [asyncio.create_task(consume(n, requester, queue))\
+                 .add_done_callback(task_completed) for n in range(1, settings.MAX_THREADS)]
+    await queue.join()  # Implicitly awaits consumers
+
+    for cons in consumers:
+        cons.cancel()
+
+if __name__ == "__main__":
+    start = time.perf_counter()
+    asyncio.run(main())
+    elapsed = time.perf_counter() - start
+    print(f"Spider completed in {elapsed:0.5f} seconds.")

@@ -2,6 +2,8 @@ import asyncio
 import logging
 
 from _datetime import datetime
+from typing import Dict, Optional, Any, List, Tuple, Set
+
 import tldextract
 from lxml import html, etree
 from urllib.parse import urldefrag, unquote
@@ -14,7 +16,7 @@ from parser.backlinks import processing_backlinks
 from parser.redirects import processing_redirects
 
 
-logging.basicConfig(filename=settings.LOG_PARSER, level=settings.LOGGER_LEVEL, format=settings.FORMAT)
+logging.basicConfig(filename=settings.LOGGER_PATH, level=settings.LOGGER_LEVEL, format=settings.LOGGER_FORMAT)
 
 
 class PageParser:
@@ -26,14 +28,14 @@ class PageParser:
         self.db_conn_dict = dict()
         self.db_data = dict()
 
-    async def _set_db_conn_dict(self, db_conn_dict):
+    async def _set_db_conn_dict(self, db_conn_dict: Dict) -> None:
         self.db_conn_dict = db_conn_dict
 
-    async def _set_db_data(self, url_data, page_tld):
+    async def _set_db_data(self, url_data: Dict, page_tld: str) -> None:
         ids = url_data['domain_id'] if url_data['table'] == 'domains' else url_data['page_id']
         self.db_data = {'db': str(page_tld), 'table': url_data['table'], 'ids': ids}
 
-    async def parse_content(self, db_conn_dict, url_data, answer, domain_url, page_tld):
+    async def parse_content(self, db_conn_dict: Dict, url_data: Dict, answer: Dict, domain_url: str, page_tld: str) -> None:
         await self._set_db_conn_dict(db_conn_dict)
         await self._set_db_data(url_data, page_tld)
 
@@ -53,7 +55,7 @@ class PageParser:
         if self.html_page is not None:
             await self.parse_page(url_data, answer, domain_url)
 
-    async def _update_source_data(self, answer):
+    async def _update_source_data(self, answer: Dict) -> None:
         if self.db_data['table'] == 'domains':
             len_content = 0
             title = 'No content'
@@ -68,7 +70,7 @@ class PageParser:
         # update domain or url which was source for this data
         await self._update_source()
 
-    async def _get_html(self, document):
+    async def _get_html(self, document: str) -> Any:
         html_page = None
 
         if not len(document):
@@ -88,7 +90,7 @@ class PageParser:
 
         return html_page
 
-    async def parse_page(self, url_data, answer, domain_url):
+    async def parse_page(self, url_data: Dict, answer: Dict, domain_url: str) -> None:
         domains, pages, backlinks, redirects = await self._get_data_from_page(
             self, self.db_data['db'],
             answer['host'],
@@ -120,7 +122,7 @@ class PageParser:
             await self.db_conn_dict[self.db_data['db']].execute(sql)
 
     @staticmethod
-    async def _get_data_from_page(self, page_tld, host, page_domain):
+    async def _get_data_from_page(self, page_tld: str, host: str, page_domain: str) -> Tuple[Set, Set, Set, Set]:
         urls = set()
         domains = set()
         backlinks = set()
@@ -178,7 +180,7 @@ class PageParser:
                     urls.add(internal_link)
         return domains, urls, backlinks, redirects
 
-    async def _extract_title(self):
+    async def _extract_title(self) -> Tuple[int, str]:
         """Extract title and len(html) from html"""
 
         try:
@@ -194,7 +196,7 @@ class PageParser:
         return len_content, title.strip()
 
     @staticmethod
-    async def _get_anchor(link):
+    async def _get_anchor(link) -> str:
         anchor = img = ''
 
         for element in link.iter():
@@ -210,7 +212,7 @@ class PageParser:
         return ''
 
     @staticmethod
-    async def _get_rel(link):
+    async def _get_rel(link) -> bool:
         dofollow = True
         try:
             rel = link.xpath('./@rel')[0]
@@ -221,17 +223,17 @@ class PageParser:
         return dofollow
 
     @staticmethod
-    def _remove_xml_declaration(document):
+    def _remove_xml_declaration(document: str) -> str:
         if document.startswith('<?xml'):
             end_declaration = document.find('?>')
             return document[end_declaration + 2:]
         return document
 
-    async def _update_source(self):
+    async def _update_source(self) -> None:
         sql = await self._sql_update_source()
         await self.db_conn_dict[self.db_data['db']].execute(sql)
 
-    async def _sql_update_source(self):
+    async def _sql_update_source(self) -> str:
         # if domain or pages
         now = datetime.now()
         if self.db_data['table'] == 'domains':

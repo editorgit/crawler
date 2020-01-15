@@ -5,6 +5,7 @@ import json
 import csv
 import re
 import asyncio
+import aioredis
 from typing import Tuple
 
 import aiohttp
@@ -40,10 +41,10 @@ class BQueue(asyncio.Queue):
         self.put_counter = 0
         self.is_reached = False
 
-    def _put_nowait(self, item):
+    def put_nowait(self, item):
 
         if not self.is_reached:
-            super()._put_nowait(item)
+            super().put_nowait(item)
             self.put_counter += 1
 
             if 0 < self.capacity == self.put_counter:
@@ -72,10 +73,11 @@ class WebSpider:
 
         # self.q_crawl = BQueue(capacity=max_crawl)
         self.q_parse = BQueue(capacity=max_parse)
+        self.publisher = None
+        self.subscriber = None
 
         self.counter = dict({'successful': 0, 'unsuccessful': 0})
         self.test = test
-        self.stop = False
 
         self.db_conn_dict = dict()
         self.create_conn_dict = create_conn_dict
@@ -92,6 +94,11 @@ class WebSpider:
         """
         self.db_conn_dict = await self.create_conn_dict()
 
+    async def _create_redis(self):
+        self.publisher = await aioredis.create_redis(f'redis://{settings.DB_HOST}', db=1)
+        self.subscriber = await aioredis.create_redis(f'redis://{settings.DB_HOST}', db=2)
+        # self.subscriber = await subscriber.subscribe('chan:queue')
+
     async def get_urls4crawler(self):
         """
         Get URLS from DB and put them in Queue
@@ -103,6 +110,8 @@ class WebSpider:
 
         for db_request in asyncio.as_completed(db_list_request):
             await self._update_queue(await db_request)
+
+        self.log.warning(f"Queue start {self.q_parse.qsize()}")
 
     async def _update_queue(self, url_list):
         """
@@ -144,9 +153,7 @@ class WebSpider:
                     title = f"Content type: IMAGE"
                     self.log.debug(title)
                     self.counter['unsuccessful'] += 1
-                    answer['http_status'] = 71
-                    answer['title'] = title
-                    return answer
+                    return answer.update({'http_status': 71, 'title': title})
 
                 try:
                     html = await response.text()
@@ -164,51 +171,35 @@ class WebSpider:
 
         except aiohttp.client_exceptions.ClientConnectorError:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 51
-            answer['title'] = "ClientConnectorError"
-            return answer
+            return {'http_status': 51, 'title': 'ClientConnectorError'}
 
         except aiohttp.client_exceptions.ServerDisconnectedError:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 52
-            answer['title'] = "ServerDisconnectedError"
-            return answer
+            return {'http_status': 52, 'title': 'ServerDisconnectedError'}
 
         except aiohttp.client_exceptions.ClientOSError:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 53
-            answer['title'] = "ClientOSError"
-            return answer
+            return {'http_status': 53, 'title': 'ClientOSError'}
 
         except aiohttp.client_exceptions.TooManyRedirects:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 54
-            answer['title'] = "TooManyRedirects"
-            return answer
+            return {'http_status': 54, 'title': 'TooManyRedirects'}
 
         except aiohttp.client_exceptions.ClientResponseError:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 55
-            answer['title'] = "ClientResponseError"
-            return answer
+            return {'http_status': 55, 'title': 'ClientResponseError'}
 
         except aiohttp.client_exceptions.ClientPayloadError:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 56
-            answer['title'] = "ClientPayloadError"
-            return answer
+            return {'http_status': 56, 'title': 'ClientPayloadError'}
 
         except ValueError:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 57
-            answer['title'] = "URL should be absolute"
-            return answer
+            return {'http_status': 57, 'title': 'URL should be absolute'}
 
         except asyncio.TimeoutError:
             self.counter['unsuccessful'] += 1
-            answer['http_status'] = 58
-            answer['title'] = "asyncio.TimeoutError"
-            return answer
+            return {'http_status': 58, 'title': 'asyncio.TimeoutError'}
 
     async def __wait(self, name):
         if self.delay > 0:
@@ -230,26 +221,30 @@ class WebSpider:
 
     async def parse_url(self):
         url_data = await self.q_parse.get()
+        # url_data = await self.subscriber.get_json()
+        # url_data = self.subscriber.rpop('queue', encoding='utf-8')
 
-        if self.q_parse.qsize() % 100 == 0:
+        if self.q_parse.qsize() % 10 == 0:
             self.log.info(f"Queue size: {self.q_parse.qsize()}")
 
-        self.stop = False
-        start_time = datetime.now()
-        start_pause = start_time.replace(hour=2, minute=00)
-        end_pause = start_time.replace(hour=2, minute=20)
+        # Pause for export data
+        current_time = datetime.now()
+        start_pause = current_time.replace(hour=2, minute=00)
+        end_pause = current_time.replace(hour=2, minute=20)
 
-        if end_pause > start_pause > start_time:
-            self.stop = True
+        if end_pause > current_time > start_pause:
+            time.sleep(60*20)
 
         # TODO: need replace with Redis
-        if not self.lock_queue and self.q_parse.qsize() < settings.LOW_LIMIT and not self.test and not self.stop:
+        if not self.lock_queue and self.q_parse.qsize() < settings.LOW_LIMIT and not self.test:
+            # self.publisher.publish('chan:main', 'Update')
+
             self.lock_queue = True
             start = self.q_parse.qsize()
             start_time = datetime.now()
             self.log.warning(f"Queue update {start}: {start_time}")
             await self.get_urls4crawler()
-            stop = self.q_parse.qsize() # if stop == 0, after update queue, need pause
+            stop = self.q_parse.qsize()  # if stop == 0, after update queue, need pause
             stop_time = datetime.now()
             self.log.warning(f"Queue after update {stop - start}: {stop_time - start_time}\n")
             self.lock_queue = False
@@ -299,14 +294,16 @@ class WebSpider:
     async def run(self):
         start = time.time()
 
-        self.log.warning(f'Start working: {datetime.now()}')
+        self.log.warning(f'Start spider')
         await self._create_session()
         await self._create_connections()
+        await self._create_redis()
 
         if self.test:
             await self.q_parse.put(self.test)
         else:
             await self.get_urls4crawler()
+            # await self.publisher.publish('chan:main', 'Update')
 
         def task_completed(future):
             # This function should never be called in right case.
@@ -316,14 +313,16 @@ class WebSpider:
                 self.log.error('Worker has finished with error: {} '
                                .format(exc), exc_info=True)
 
-        tasks = []
+        # fut_list = []
 
         self.log.warning(f'Concurrency: {self.concurrency}')
 
-        for _ in range(self.concurrency):
-            fut_parse = asyncio.ensure_future(self._requester())
-            fut_parse.add_done_callback(task_completed)
-            tasks.append(fut_parse)
+        # for _ in range(self.concurrency):
+        #     fut_parse = asyncio.create_task(self._requester()).add_done_callback(task_completed)
+        #     fut_list.append(fut_parse)
+
+        tasks = await asyncio.gather(asyncio.create_task(self._requester()) \
+                                     .add_done_callback(task_completed) for _ in range(self.concurrency))
 
         await self.q_parse.join()
 
