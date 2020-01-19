@@ -3,6 +3,8 @@ from typing import Dict, List
 
 from database.db import create_conn_dict
 
+import settings
+
 
 class GetUrls:
 
@@ -31,7 +33,6 @@ class GetUrls:
             db_list_request.append(db_conn.fetch_pages4crawler(self.log))
 
         for db_request in asyncio.as_completed(db_list_request):
-            # url_list = await db_request
             await self._update_queue(queue, await db_request)
 
         self.log.warning(f"Queue start/update {queue.qsize()}")

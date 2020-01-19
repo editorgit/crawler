@@ -31,18 +31,19 @@ async def update_queue(db_connector: GetUrls, queue: asyncio.Queue) -> None:
     await db_connector.get_urls4crawler(queue)
 
 
-async def consume(name: int, requester: Requester, queue: asyncio.Queue) -> None:
+async def consume(name: int, requester: Requester, queue: asyncio.Queue, lock: asyncio.Lock) -> None:
 
     while True:
         url_data = await queue.get()
 
         # Periodical log
-        if queue.qsize() % 300 == 0:
-            LOGGER.info(f"Consumer {name} got {url_data} from queue.")
+        if queue.qsize() % 500 == 0:
             LOGGER.info(f"Queue size: {queue.qsize()}")
+            # LOGGER.info(f"Consumer {name} got {url_data} from queue.")
 
         if queue.qsize() < settings.LOW_LIMIT:
-            await update_queue(requester.db_connector, queue)
+            with await lock:
+                await update_queue(requester.db_connector, queue)
 
         LOGGER.debug('Parsing: {}'.format(url_data))
 
@@ -57,6 +58,7 @@ async def consume(name: int, requester: Requester, queue: asyncio.Queue) -> None
 async def main():
     # init queue
     queue = asyncio.Queue()
+    lock = asyncio.Lock()
 
     # init DB connector
     db_connector = GetUrls()
@@ -69,7 +71,7 @@ async def main():
     await start_produce(requester, queue)
 
     # Consumers
-    consumers = [asyncio.create_task(consume(n, requester, queue))\
+    consumers = [asyncio.create_task(consume(n, requester, queue, lock))\
                  .add_done_callback(task_completed) for n in range(1, settings.MAX_THREADS)]
     await queue.join()  # Implicitly awaits consumers
 

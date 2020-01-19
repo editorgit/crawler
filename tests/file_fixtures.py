@@ -1,6 +1,8 @@
+import pytest
 
-@pytest.yield_fixture
-def open_file():
+
+@pytest.fixture()
+def file_fixtures():
     f = None
 
     def opener(filename):
