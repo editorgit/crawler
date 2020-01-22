@@ -1,6 +1,6 @@
 import os
 TLDS = ['lt', 'lv', 'ee', 'fi', 'se', 'no', 'dk']
-# TLDS = ['fi']
+# TLDS = ['dk']
 # TLDS = ['ee', 'fi']
 
 DB_HOST = '95.217.8.25'
@@ -12,14 +12,14 @@ MAX_THREADS = 100
 
 AIO_DNS_ERROR = 599
 
-MAX_LIMIT = 10000
-LOW_LIMIT = 200
+QUEUE_MAX_LIMIT = 10000
+QUEUE_LOW_LIMIT = 500
 
 MAX_DOMAINS = 3000
 MAX_PAGES = 3000
 
 FILE_TYPES = {'.jpg', '.png', '.jpeg', '.xml', '.pdf', '.mp4', '.mp3',
-             '.gif', '.swf', '.css', '.js', '.scss', '.m4v', '.doc', '.docx', '.odt'}
+              '.gif', '.swf', '.css', '.js', '.scss', '.m4v', '.doc', '.docx', '.odt'}
 
 
 STOP_WORDS = ['void(', '.jpg?', '.png?', 'css?', 'sid=', '&ver', 'jsessionid=', 'token=', 'skype:', 'javascript:',
