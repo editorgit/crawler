@@ -16,7 +16,7 @@ class Requester:
     timeout = 15
     cookies = ''
 
-    def __init__(self, logger, db_connector):
+    def __init__(self, logger, db_connector, semaphores=100):
         self.log = logger
         self.db_connector = db_connector
         self.client = aiohttp.ClientSession(
@@ -24,6 +24,9 @@ class Requester:
             headers=self.headers,
             cookies=self.cookies,
             conn_timeout=self.timeout)
+
+        # init Semaphore
+        self.sema = asyncio.BoundedSemaphore(semaphores)
 
     async def url_handler(self, url_data: Dict) -> None:
         url_to_parse = await self.get_correct_url(url_data)
@@ -41,7 +44,7 @@ class Requester:
     async def request_url(self, url: str) -> Dict:
         answer = dict()
         try:
-            async with self.client.get(url, timeout=self.timeout) as response:
+            async with self.sema, self.client.get(url, timeout=self.timeout) as response:
                 # print(f"response: {response}")
                 if response.content_type.startswith('image'):
                     title = f"Content type: IMAGE"

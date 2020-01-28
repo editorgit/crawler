@@ -39,7 +39,6 @@ class PgActions:
         async with self.pg_pool.acquire() as connection:
             return await connection.fetch(sql_select, *args, **kwargs)
 
-
     async def fetch_pages4crawler(self, logger, *args, **kwargs):
         # asyncio.sleep(0.5)
         # time.sleep(0.5)

@@ -72,8 +72,8 @@ async def main():
     await start_produce(requester, queue)
 
     # Consumers
-    consumers = [asyncio.create_task(consume(n, requester, queue))\
-                 .add_done_callback(task_completed) for n in range(1, settings.MAX_THREADS)]
+    consumers = [asyncio.create_task(consume(thread, requester, queue)).add_done_callback(task_completed) \
+                 for thread in range(1, settings.MAX_THREADS)]
     await queue.join()  # Implicitly awaits consumers
 
     for cons in consumers:
